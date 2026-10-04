@@ -11,6 +11,12 @@
       "path": "packages/sdk/tsconfig.build.json"
     },
     {
+      "path": "packages/fake-upstream"
+    },
+    {
+      "path": "packages/fake-upstream/tsconfig.build.json"
+    },
+    {
       "path": "apps/api"
     },
     {

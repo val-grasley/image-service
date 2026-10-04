@@ -459,3 +459,19 @@ by hand.
 **Consequences:** Sources are typechecked twice where a build project exists, which is cheap
 at this size. Commits that create a workspace's first source add its references.
 
+## 36. The fixture generator refuses specs it cannot honor
+
+**Date:** 2026-10-04
+**Context:** The generator encodes every fixture with sharp, and sharp cannot carry every
+spec into every format. Probed against sharp 0.35.5: `withMetadata({ orientation })` drops
+the tag for GIF, and for AVIF rotates the pixels and stores no tag. An alpha channel is
+dropped for JPEG and TIFF (the output has three channels), and GIF keeps the channel but
+rounds half opacity to fully opaque.
+**Decision:** `generateImage` rejects with a `RangeError` for `orientation` with GIF or AVIF
+and for `alpha` with JPEG, TIFF, or GIF. The server answers such a request 400.
+**Rejected:** Encoding anyway and silently producing a fixture that lacks what its spec
+claims. A test asking for an oriented GIF or a transparent JPEG would pass or fail for
+reasons unrelated to the code it tests.
+**Consequences:** Oriented fixtures are JPEG, PNG, WebP, or TIFF; transparent fixtures are
+PNG, WebP, or AVIF. A test of flattening onto an opaque output starts from one of the
+transparent formats.

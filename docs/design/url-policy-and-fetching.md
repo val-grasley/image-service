@@ -188,9 +188,13 @@ Fetcher integration tests (`apps/api/test/fetcher.test.ts`) run against the fake
   succeeds and `MAX_REDIRECTS + 1` is `too_many_redirects`; a hop to a private address is
   `url_not_allowed`; a hop to a `PUBLIC_HOSTS` name is `url_not_allowed`; https to http is
   `url_not_allowed`.
-- `Content-Length` over the cap is `source_too_large` with zero body bytes read (the fake
-  records bytes sent); no `Content-Length` and an oversized body is `source_too_large` with
-  the connection aborted; `Content-Encoding: gzip` is `upstream_error`.
+- `Content-Length` over the cap is `source_too_large` with zero body bytes read: the test
+  requests `/huge?bytes=&ms=` with `ms` longer than `FETCH_TOTAL_TIMEOUT_MS`, so the fake
+  sends the headers and holds the body, and asserts the error code and that the fake's
+  `bytesSent` for that request is 0. A fetcher that waited for the body instead of checking
+  `Content-Length` up front would get `upstream_timeout`. No `Content-Length` and an
+  oversized body is `source_too_large` with the connection aborted; `Content-Encoding: gzip`
+  is `upstream_error`.
 - Upstream 404 and 500 are `upstream_error` with `upstreamStatus`; connection refused is
   `upstream_error`; a slow body past the total deadline is `upstream_timeout`; a server
   that accepts and sends no headers past the total deadline (`/slow-headers`) is
