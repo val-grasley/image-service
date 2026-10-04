@@ -76,7 +76,7 @@ or a spec the generator refuses, is answered 400 with a one-line text body.
 | `/html`, `/svg`, `/truncated` | Non-image, SVG, and a cut-off JPEG header |
 | `/gzip` | A gzip-encoded image with `Content-Encoding: gzip` |
 | `/status/:code` | That status (200 to 599) with a short text body; 204, 205, and 304 carry no body and no `Content-Length` |
-| `/with-validators` | An image with `ETag`, `Last-Modified`, `Set-Cookie`, `X-Powered-By` |
+| `/with-validators?etag=&lastModified=` | An image with `ETag`, `Last-Modified`, `Set-Cookie`, `X-Powered-By`; `etag` and `lastModified` replace the two validators, and an empty value omits that header |
 
 Unknown paths are 404. The server sets no `Cache-Control`.
 

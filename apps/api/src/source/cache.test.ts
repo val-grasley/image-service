@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { SourceCache } from './cache.ts';
+import type { FetchedSource } from './fetcher.ts';
 
-type Source = { bytes: Uint8Array; finalUrl: URL };
-
-function source(byteLength: number): Source {
-  return { bytes: new Uint8Array(byteLength), finalUrl: new URL('http://cdn.example.com/a.png') };
+function source(byteLength: number): FetchedSource {
+  return {
+    bytes: new Uint8Array(byteLength),
+    finalUrl: new URL('http://cdn.example.com/a.png'),
+    upstream: {},
+  };
 }
 
 function sourceCache() {
   const clock = { time: 0, now: () => clock.time };
   const limits = { sourceCacheMaxBytes: 100, sourceCacheTtlSeconds: 300 };
-  return { cache: new SourceCache<Source>(limits, clock), clock };
+  return { cache: new SourceCache(limits, clock), clock };
 }
 
 describe('SourceCache', () => {

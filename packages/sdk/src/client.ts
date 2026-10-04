@@ -9,7 +9,9 @@ export type SourceInfo = {
   finalUrl: string;
   /** The type detected from the bytes; the upstream `Content-Type` is not trusted. */
   format: SourceType;
+  /** Width in pixels after EXIF orientation. */
   width: number;
+  /** Height in pixels after EXIF orientation. */
   height: number;
   /** Size of the source in bytes. */
   bytes: number;

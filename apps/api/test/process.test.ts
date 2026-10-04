@@ -1,0 +1,253 @@
+import { startFakeUpstream } from '@image-service/fake-upstream/server';
+import sharp from 'sharp';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createHarness, query, sourceUrl, type FakeUpstream } from './harness.ts';
+
+let fake: FakeUpstream;
+
+beforeAll(async () => {
+  fake = await startFakeUpstream();
+});
+
+afterAll(async () => {
+  await fake.close();
+});
+
+async function decoded(response: Response) {
+  const { format, width, height } = await sharp(await response.arrayBuffer()).metadata();
+  return { format, width, height };
+}
+
+describe('GET /process', () => {
+  // The brief's three example requests come first, then cases they leave uncovered: one
+  // dimension only, and the PNG default for TIFF sources.
+  const examples = [
+    {
+      name: 'fits a 1000 by 800 JPEG inside 500 by 300 with the aspect kept, since crop defaults to fit',
+      source: '/image/jpeg?w=1000&h=800',
+      params: { width: '500', height: '300' },
+      expected: { format: 'jpeg', width: 375, height: 300 },
+    },
+    {
+      name: 'converts a PNG to JPEG at quality 80 without resizing',
+      source: '/image/png?w=640&h=480&pattern=quadrants',
+      params: { format: 'jpeg', quality: '80' },
+      expected: { format: 'jpeg', width: 640, height: 480 },
+    },
+    {
+      name: 'fills exactly 800 by 600 from a 1200 by 800 PNG and encodes WebP',
+      source: '/image/png?w=1200&h=800&pattern=quadrants',
+      params: { width: '800', height: '600', format: 'webp', crop: 'fill' },
+      expected: { format: 'webp', width: 800, height: 600 },
+    },
+    {
+      name: 'resizes a JPEG to a width alone, keeping the aspect ratio and the format',
+      source: '/image/jpeg?w=800&h=600',
+      params: { width: '400' },
+      expected: { format: 'jpeg', width: 400, height: 300 },
+    },
+    {
+      name: 'resizes a TIFF to a height and returns PNG, the default for TIFF sources',
+      source: '/image/tiff?w=320&h=240',
+      params: { height: '120' },
+      expected: { format: 'png', width: 160, height: 120 },
+    },
+  ];
+
+  for (const example of examples) {
+    it(example.name, async () => {
+      const { request } = createHarness(fake);
+      const response = await request(
+        query('/process', { url: sourceUrl(fake, example.source), ...example.params }),
+      );
+      const { format, width, height } = example.expected;
+      expect(response.status).toBe(200);
+      expect({
+        contentType: response.headers.get('content-type'),
+        format: response.headers.get('x-image-format'),
+        width: response.headers.get('x-image-width'),
+        height: response.headers.get('x-image-height'),
+      }).toEqual({
+        contentType: `image/${format}`,
+        format,
+        width: String(width),
+        height: String(height),
+      });
+      expect(await decoded(response)).toEqual(example.expected);
+    });
+  }
+
+  it('sends every image header with its value and none of the upstream headers', async () => {
+    const { request, config } = createHarness(fake);
+    const response = await request(
+      query('/process', { url: sourceUrl(fake, '/with-validators'), width: '32', format: 'png' }),
+      { headers: { 'X-Request-Id': 'image-headers' } },
+    );
+    expect(response.status).toBe(200);
+    expect(Object.fromEntries(response.headers)).toMatchObject({
+      'content-type': 'image/png',
+      'cache-control': `public, max-age=${String(config.resultCacheTtlSeconds)}`,
+      'x-image-width': '32',
+      'x-image-height': '24',
+      'x-image-format': 'png',
+      'x-result-cache': 'miss',
+      'x-request-id': 'image-headers',
+      'x-content-type-options': 'nosniff',
+      'content-disposition': 'inline',
+    });
+    expect(response.headers.get('etag')).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(response.headers.get('content-length')).toBe(
+      String((await response.clone().arrayBuffer()).byteLength),
+    );
+    for (const upstreamHeader of ['set-cookie', 'x-powered-by', 'last-modified']) {
+      expect(response.headers.has(upstreamHeader)).toBe(false);
+    }
+    expect(response.headers.get('etag')).not.toBe('"fake-upstream-1"');
+  });
+
+  it('answers HEAD with the headers of GET and no body', async () => {
+    const path = query('/process', { url: sourceUrl(fake, '/image/webp'), width: '20' });
+    const init = { headers: { 'X-Request-Id': 'head-matches-get' } };
+    const get = await createHarness(fake).request(path, init);
+    const head = await createHarness(fake).request(path, { ...init, method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(Object.fromEntries(head.headers)).toEqual(Object.fromEntries(get.headers));
+    expect((await head.arrayBuffer()).byteLength).toBe(0);
+    const body = await get.arrayBuffer();
+    expect(body.byteLength).toBeGreaterThan(0);
+    expect(head.headers.get('content-length')).toBe(String(body.byteLength));
+  });
+
+  it('answers a request carrying the returned ETag with 304 and no body', async () => {
+    const { request, config } = createHarness(fake);
+    const path = query('/process', { url: sourceUrl(fake, '/image/png'), width: '16' });
+    const first = await request(path);
+    const etag = first.headers.get('etag') ?? '';
+    const second = await request(path, {
+      headers: { 'If-None-Match': etag, 'X-Request-Id': 'revalidate' },
+    });
+    expect(second.status).toBe(304);
+    expect((await second.arrayBuffer()).byteLength).toBe(0);
+    expect({
+      etag: second.headers.get('etag'),
+      cacheControl: second.headers.get('cache-control'),
+      requestId: second.headers.get('x-request-id'),
+    }).toEqual({
+      etag,
+      cacheControl: `public, max-age=${String(config.resultCacheTtlSeconds)}`,
+      requestId: 'revalidate',
+    });
+  });
+});
+
+describe('GET /process validation', () => {
+  const integer1To1024 = 'must be an integer between 1 and 1024';
+  const integer1To100 = 'must be an integer between 1 and 100';
+  const absoluteUrl = 'must be an absolute URL';
+  const cases: { name: string; params: Record<string, string>; field: string; message: string }[] =
+    [
+      {
+        name: 'a url that is not a URL',
+        params: { url: 'not a url' },
+        field: 'url',
+        message: absoluteUrl,
+      },
+      { name: 'a relative url', params: { url: '/image/png' }, field: 'url', message: absoluteUrl },
+      { name: 'a width of 0', params: { width: '0' }, field: 'width', message: integer1To1024 },
+      {
+        name: 'a width above MAX_OUTPUT_DIMENSION',
+        params: { width: '1025' },
+        field: 'width',
+        message: integer1To1024,
+      },
+      {
+        name: 'a fractional width',
+        params: { width: '1.5' },
+        field: 'width',
+        message: integer1To1024,
+      },
+      {
+        name: 'a width that is not a number',
+        params: { width: 'wide' },
+        field: 'width',
+        message: integer1To1024,
+      },
+      { name: 'a height of 0', params: { height: '0' }, field: 'height', message: integer1To1024 },
+      {
+        name: 'an unknown crop',
+        params: { crop: 'stretch' },
+        field: 'crop',
+        message: 'must be one of fit, fill, scale, pad',
+      },
+      {
+        name: 'an unknown format',
+        params: { format: 'gif' },
+        field: 'format',
+        message: 'must be one of jpeg, png, webp, avif',
+      },
+      {
+        name: 'a quality of 0',
+        params: { quality: '0' },
+        field: 'quality',
+        message: integer1To100,
+      },
+      {
+        name: 'a quality of 101',
+        params: { quality: '101' },
+        field: 'quality',
+        message: integer1To100,
+      },
+    ];
+
+  for (const c of cases) {
+    it(`refuses ${c.name} with a field error naming ${c.field}`, async () => {
+      const { request } = createHarness(fake);
+      const response = await request(
+        query('/process', { url: sourceUrl(fake, '/image/png'), ...c.params }),
+      );
+      expect(response.status).toBe(400);
+      expect(response.headers.get('content-type')).toBe('application/problem+json');
+      expect(await response.json()).toMatchObject({
+        code: 'invalid_parameter',
+        status: 400,
+        errors: [{ field: c.field, message: c.message }],
+      });
+    });
+  }
+
+  it('refuses a missing url with a field error naming url', async () => {
+    const { request } = createHarness(fake);
+    const response = await request(query('/process', { width: '10' }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      code: 'invalid_parameter',
+      errors: [{ field: 'url', message: absoluteUrl }],
+    });
+  });
+
+  it('reports every invalid parameter, each once', async () => {
+    const { request } = createHarness(fake);
+    const response = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png'), width: '0', crop: 'stretch' }),
+    );
+    expect(await response.json()).toMatchObject({
+      errors: [
+        { field: 'width', message: integer1To1024 },
+        { field: 'crop', message: 'must be one of fit, fill, scale, pad' },
+      ],
+    });
+  });
+
+  it('refuses width times height above MAX_OUTPUT_PIXELS as a width error, without fetching', async () => {
+    const { request } = createHarness(fake);
+    const before = fake.requests().length;
+    const response = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png'), width: '1024', height: '1000' }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      errors: [{ field: 'width', message: 'width times height must be at most 1000000 pixels' }],
+    });
+    expect(fake.requests()).toHaveLength(before);
+  });
+});

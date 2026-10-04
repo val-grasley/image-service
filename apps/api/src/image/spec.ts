@@ -9,7 +9,15 @@ export type TransformSpec = {
   quality: number;
 };
 
-export function toSpec(params: ProcessParams, defaults: { quality: number }): TransformSpec {
+// Zod types an omitted optional field as `T | undefined`, which exactOptionalPropertyTypes keeps
+// apart from ProcessParams' absent key; toSpec treats the two alike.
+type ValidatedParams = {
+  [K in keyof ProcessParams]: undefined extends ProcessParams[K]
+    ? ProcessParams[K] | undefined
+    : ProcessParams[K];
+};
+
+export function toSpec(params: ValidatedParams, defaults: { quality: number }): TransformSpec {
   return {
     url: new URL(params.url),
     width: params.width,

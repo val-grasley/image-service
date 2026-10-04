@@ -12,15 +12,24 @@ type AppDeps = OperationDeps & {   // OperationDeps is defined in operations/ (d
   clock: Clock;
 };
 
-function createApp(config: Config, deps: AppDeps): OpenAPIHono;
-function defaultDeps(config: Config): AppDeps;
+function createApp(config: Config, deps: AppDeps, serviceVersion: string): OpenAPIHono;
+function defaultDeps(config: Config, serviceVersion: string): AppDeps;
 ```
 
-`app.ts` holds both. `server.ts` and `lambda.ts` call `createApp(loadConfig(), defaultDeps(config))`.
-Tests call `createApp(testConfig(overrides), deps)` with the fake upstream's address in
-`ALLOWED_HOSTS` and otherwise real collaborators; the only substitutions tests make are
-the clock, the DynamoDB client, and (for a few pipeline tests) a recording wrapper around
-the pipeline.
+`app.ts` holds both. `server.ts` and `lambda.ts` call
+`createApp(loadConfig(), defaultDeps(config, version), version)`, each obtaining `version`
+as its runtime allows (decision 44); `app.ts` does no file I/O.
+Tests call `createApp(testConfig(overrides), deps, version)` with the fake upstream's address
+in `ALLOWED_HOSTS`, a literal version, and otherwise real collaborators; the only
+substitutions tests make are the clock, the DynamoDB client, (for a few pipeline tests) a
+recording wrapper around the pipeline, and (to show the URL rules run before any cache
+lookup) a shared cache instance passed to two apps with different `ALLOWED_HOSTS`. Tests pass an empty environment to `app.request()`, or one carrying
+`incoming.socket.remoteAddress`, since the rate limiter reads `c.env`, which
+`app.request()` otherwise leaves undefined.
+
+`server.ts` serves `/`, `/index.html`, `/favicon.ico`, and `/assets/*` from `apps/web/dist`
+with `Cache-Control: no-cache` when that directory exists, mirroring the CloudFront
+behaviors, and hands every other request, and any file not found there, to the app.
 
 ## Errors
 
@@ -33,6 +42,7 @@ class ServiceError extends Error {
   readonly fields?: { field: string; message: string }[];
   readonly upstreamStatus?: number;
   readonly rateLimit?: RateLimitDecision;
+  readonly allow?: readonly string[];     // the Allow list of a 405 (decision 43)
   constructor(code, detail, extra?, options?: { cause?: unknown });
 }
 ```
@@ -93,22 +103,32 @@ step 4 requires.
 
 The handler: parses `If-None-Match` into a list; calls `processImage`; on `image` builds
 the response with the headers in section 7 and the body (omitted for HEAD); on
-`not_modified` responds 304 with `ETag`, `Cache-Control`, `X-Request-Id`.
+`not_modified` responds 304 with `ETag`, `Cache-Control`, `X-Request-Id`. The image
+response also sets `Content-Length` from the byte length, so HEAD carries it; whether the
+Lambda streaming adapter keeps it is for the infrastructure commit to confirm, and clients
+measure size from the body regardless (section 7).
+
+Each validation message is set on its Zod check (`{ error }`), and the cross-field
+refinement carries its own, so the default hook only copies `issue.message` into `fields`,
+one entry per parameter. The query schema's output types an omitted field as
+`T | undefined`, so `toSpec` accepts that shape as well as `ProcessParams` (decision 45).
 
 **`GET /info`.** Same `url` schema only. Calls `describeSource`, which fetches (through the
 source cache), sniffs, and inspects. Responds with JSON
 `{ url, finalUrl, format, width, height, bytes, pages }`, where `format` is the sniffed
 `SourceType`, and `Cache-Control: public, max-age=<SOURCE_CACHE_TTL_SECONDS>`.
 
-**`GET /health`.** `{ status: 'ok', version }` from the package version baked in at build,
-`Cache-Control: no-store`. No dependencies are checked; the function is healthy if it can
+**`GET /health`.** `{ status: 'ok', version }` from the service version the entry passes to
+`createApp` (decision 44), `Cache-Control: no-store`. No dependencies are checked; the function is healthy if it can
 answer.
 
 **`GET /openapi.json`, `GET /docs`.** Section "OpenAPI" below.
 
 **Unknown path**: `app.notFound` throws `not_found`. **Unsupported method on a known path**:
 after each route's method handlers, `app.all(path, ...)` throws `method_not_allowed` with
-the `Allow` list for that path. Hono dispatches HEAD to the GET handler and returns its
+the `Allow` list for that path. The list is derived from the routes registered on the app,
+plus HEAD wherever GET is registered, and travels on `ServiceError` as `allow`, from which
+`toProblem` writes the header (decision 43). Hono dispatches HEAD to the GET handler and returns its
 status and headers with no body, so HEAD is not registered separately.
 
 ## Middleware, in order
@@ -130,7 +150,8 @@ status and headers with no body, so HEAD is not registered separately.
 
 A request log line is written when the response is complete: `requestId`, `method`, `path`
 (no query), `status`, `durationMs`, `code` if error, `resultCache` if image, source
-`hostname` if any.
+`hostname` if any. The `request-id` middleware writes it after `next()`, from context
+variables the route handlers and `onError` set; a 5xx line is at `error` with the error.
 
 ## OpenAPI
 

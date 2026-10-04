@@ -582,3 +582,59 @@ dimensions and, under `autoOrient`, the oriented ones, from the header alone.
 **Rejected:** The stored dimensions: `/info` would report 400 by 200 for an image that
 browsers and `/process` show as 200 by 400.
 **Consequences:** The pixel bound is unaffected, since the product is the same.
+
+## 43. `method_not_allowed` carries its `Allow` list on `ServiceError`
+
+**Date:** 2026-10-04
+**Context:** The HTTP design has `app.all(path, ...)` throw `method_not_allowed` with the
+path's `Allow` list and `toProblem(err, requestId)` add `Allow` on 405, but `ServiceError`
+had no field to carry the list from one to the other.
+**Decision:** `ServiceError` gains an optional `allow`, set only by the 405 handler. The
+list is derived from the routes registered on the app, plus HEAD wherever GET is
+registered.
+**Rejected:** A constant `GET, HEAD` in `toProblem`: true of every route today, silently
+wrong once a route adds a method. Setting the header on the context before throwing: it
+reaches the problem response only through Hono's header merge on `c.res`, which is
+incidental behavior.
+**Consequences:** One more optional field on the domain error, alongside `rateLimit`,
+which is likewise there for a response header.
+
+## 44. The service version is an input to the app, supplied by each entry
+
+**Date:** 2026-10-04
+**Context:** `/health`, the OpenAPI `info.version`, and the fetcher's `User-Agent` need the
+API package's version. A JSON import of `../package.json` does not compile, because the
+build project's `rootDir` is `src`. Reading the manifest with `createRequire` from `app.ts`
+works from `src/` and `dist/` but not from the Lambda bundle, where no manifest sits at
+that relative path and esbuild does not follow `createRequire`.
+**Decision:** `createApp(config, deps, serviceVersion)` and
+`defaultDeps(config, serviceVersion)` take the version as an argument, and `app.ts` does no
+file I/O. `server.ts` reads `../package.json` through `createRequire(import.meta.url)` and
+validates `version` with Zod, which is stable because it runs only from `src/` or `dist/`.
+`lambda.ts` (sequence item 17) will use a build-time constant, declared
+`declare const SERVICE_VERSION: string` and supplied by the CDK bundling's esbuild `define`
+from the manifest. Tests pass a literal.
+**Rejected:** A JSON import with the `type: 'json'` attribute: fails `rootDir`. The manifest
+read in `app.ts`: breaks in the bundle. A version string in source or in config: drifts from
+the manifest.
+**Consequences:** Each entry owns how it learns the version. The infrastructure commit adds
+the `define`.
+
+## 45. `toSpec` accepts the query schema's output
+
+**Date:** 2026-10-04
+**Context:** The route's query schema uses `.optional()`, as the HTTP design fixes, so its
+output types an omitted field as `number | undefined`. Under `exactOptionalPropertyTypes`
+that is not assignable to `ProcessParams`, whose optional fields exclude `undefined`, so
+the validated query could not be passed to `toSpec(params: ProcessParams)`.
+**Decision:** `toSpec` takes `ProcessParams` with `| undefined` added to each optional
+field, a mapped type in `image/spec.ts`. It already treats `undefined` as absent.
+**Rejected:** Zod's `.exactOptional()`: its output matches `ProcessParams` exactly, but
+probed against zod-to-openapi 9.1.0, an `.exactOptional()` query field that carries
+`.openapi()` metadata, as every parameter here does for its description, is documented as
+`required: true`.
+Copying each defined field into a fresh object in the handler: six conditionals that exist
+only for the type checker. A `.transform()` producing `ProcessParams`: its annotation would
+satisfy the type lock by itself and defeat it.
+**Consequences:** The type lock in `process-query.test.ts` still compares the schema's own
+output, through `Normalize`, against `ProcessParams`.

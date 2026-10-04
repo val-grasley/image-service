@@ -231,6 +231,26 @@ describe('startFakeUpstream', () => {
     expect((await sharp(response.body).metadata()).format).toBe('jpeg');
   });
 
+  it('takes the validators from etag and lastModified, omitting one given empty', async () => {
+    const replaced = await fetchPath(
+      '/with-validators?etag=%22v2%22&lastModified=Thu,%2002%20Jan%202025%2000:00:00%20GMT',
+    );
+    expect([replaced.headers.etag, replaced.headers['last-modified']]).toEqual([
+      '"v2"',
+      'Thu, 02 Jan 2025 00:00:00 GMT',
+    ]);
+    const lastModifiedOnly = await fetchPath('/with-validators?etag=');
+    expect([lastModifiedOnly.headers.etag, lastModifiedOnly.headers['last-modified']]).toEqual([
+      undefined,
+      'Wed, 01 Jan 2025 00:00:00 GMT',
+    ]);
+    const neither = await fetchPath('/with-validators?etag=&lastModified=');
+    expect([neither.headers.etag, neither.headers['last-modified']]).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
   it('sets no Cache-Control', async () => {
     const responses = await Promise.all(
       ['/image/png', '/with-validators', '/status/500', '/nothing-here'].map((path) =>

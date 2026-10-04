@@ -35,7 +35,7 @@ Logs Insights can query any field.
 ## Request context
 
 The `request-id` middleware creates `logger.child({ requestId })` and stores it on the Hono
-context; operations receive it through `deps`. One request log line is written per response
+context; operations receive it as a separate argument, so `deps` are built once. One request log line is written per response
 (fields in `design/http-api.md`). Errors mapped to 5xx are logged at `error` with `err`;
 4xx at `info` with `code` only.
 

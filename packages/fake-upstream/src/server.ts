@@ -34,6 +34,8 @@ const CONTENT_TYPES: Record<SourceType, string> = {
 };
 
 const DEFAULT_IMAGE: ImageSpec = { width: 64, height: 48, format: 'jpeg' };
+const DEFAULT_ETAG = '"fake-upstream-1"';
+const DEFAULT_LAST_MODIFIED = 'Wed, 01 Jan 2025 00:00:00 GMT';
 const MAX_DIMENSION = 10_000;
 const MAX_DELAY_MS = 600_000;
 const CHUNK_BYTES = 64 * 1024;
@@ -163,10 +165,12 @@ async function respond(res: ServerResponse, record: RequestRecord): Promise<void
     }
     case '/with-validators': {
       const image = await generateImage(DEFAULT_IMAGE);
+      const etag = query.get('etag') ?? DEFAULT_ETAG;
+      const lastModified = query.get('lastModified') ?? DEFAULT_LAST_MODIFIED;
       const headers = {
         'Content-Type': CONTENT_TYPES[image.format],
-        ETag: '"fake-upstream-1"',
-        'Last-Modified': 'Wed, 01 Jan 2025 00:00:00 GMT',
+        ...(etag !== '' && { ETag: etag }),
+        ...(lastModified !== '' && { 'Last-Modified': lastModified }),
         'Set-Cookie': 'session=fake; Path=/',
         'X-Powered-By': 'fake-upstream',
       };

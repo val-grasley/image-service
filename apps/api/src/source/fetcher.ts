@@ -31,6 +31,8 @@ type Hop =
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 const ACCEPT = 'image/jpeg, image/png, image/webp, image/gif, image/avif, image/tiff';
 
+export const LOOP_MARKER_HEADER = 'x-image-service-fetch';
+
 export async function fetchSource(
   url: URL,
   deps: FetcherDeps,
@@ -136,7 +138,7 @@ async function requestHop(
       'user-agent': `image-service/${deps.serviceVersion}`,
       accept: ACCEPT,
       'accept-encoding': 'identity',
-      'x-image-service-fetch': '1',
+      [LOOP_MARKER_HEADER]: '1',
     },
   };
   // The request's signal does not interrupt a connection attempt in progress, so the deadline

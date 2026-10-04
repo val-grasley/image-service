@@ -78,7 +78,8 @@ The middleware is attached to `/process` and `/info` only. `/health`, `/openapi.
 `rate-limit/client-key.ts` derives the key as a pure function,
 `clientKey({ remoteAddress, headers }, { clientIpSource, trustedProxyCount })`, so every
 row below is tested without a request (decision 37). `http/middleware/rate-limit.ts` calls
-it with `c.env.incoming.socket.remoteAddress` and a header lookup over `c.req.header`, and
+it with `c.env.incoming.socket.remoteAddress` (undefined under the Lambda adapter, which
+binds no `incoming`) and a header lookup over `c.req.header`, and
 does nothing else with addresses.
 
 | `CLIENT_IP_SOURCE` | Source |

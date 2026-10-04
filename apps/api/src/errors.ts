@@ -8,11 +8,12 @@ export class ServiceError extends Error {
   readonly fields?: NonNullable<ProblemDetails['errors']>;
   readonly upstreamStatus?: number;
   readonly rateLimit?: RateLimitDecision;
+  readonly allow?: readonly string[];
 
   constructor(
     code: ErrorCode,
     detail: string,
-    extra: Pick<ServiceError, 'fields' | 'upstreamStatus' | 'rateLimit'> = {},
+    extra: Pick<ServiceError, 'fields' | 'upstreamStatus' | 'rateLimit' | 'allow'> = {},
     options?: { cause?: unknown },
   ) {
     super(detail, options);
@@ -21,5 +22,6 @@ export class ServiceError extends Error {
     if (extra.fields !== undefined) this.fields = extra.fields;
     if (extra.upstreamStatus !== undefined) this.upstreamStatus = extra.upstreamStatus;
     if (extra.rateLimit !== undefined) this.rateLimit = extra.rateLimit;
+    if (extra.allow !== undefined) this.allow = extra.allow;
   }
 }

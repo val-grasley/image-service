@@ -9,7 +9,7 @@ export interface RateLimiter {
   consume(key: string, nowMs: number): Promise<RateLimitDecision>;
 }
 
-const WINDOW_MS = 60_000;
+export const WINDOW_MS = 60_000;
 
 export function currentWindow(nowMs: number): {
   index: number;

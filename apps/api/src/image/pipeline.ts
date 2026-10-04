@@ -4,7 +4,7 @@ import type { Config } from '../config.ts';
 import { ServiceError } from '../errors.ts';
 import type { TransformSpec } from './spec.ts';
 
-type InspectResult = Pick<SourceInfo, 'format' | 'width' | 'height' | 'pages'>;
+export type InspectResult = Pick<SourceInfo, 'format' | 'width' | 'height' | 'pages'>;
 
 export type TransformResult = {
   bytes: Uint8Array;

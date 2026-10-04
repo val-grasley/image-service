@@ -115,7 +115,7 @@ directory's statement.
 │   │   │   ├── http/             HTTP surface only: routes, schemas, error mapping, middleware.
 │   │   │   │   ├── routes/       One file per endpoint.
 │   │   │   │   ├── middleware/   request-id, rate-limit, loop-guard.
-│   │   │   │   ├── errors.ts     AppError and its mapping to problem-details responses.
+│   │   │   │   ├── errors.ts     The mapping from ServiceError to problem-details responses.
 │   │   │   │   └── openapi.ts    Assembles the OpenAPI document from route schemas.
 │   │   │   ├── operations/       Use cases coordinating subsystems. No HTTP types, no sharp.
 │   │   │   │   ├── process-image.ts    cache → fetch → sniff → bound → transform → store.

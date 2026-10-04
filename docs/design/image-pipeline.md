@@ -23,7 +23,9 @@ function toSpec(params: ProcessParams, defaults: { quality: number }): Transform
 function cacheKey(spec: TransformSpec): string;   // format in design/caching.md
 ```
 
-`ProcessParams` is the SDK's validated parameter type. `toSpec` applies defaults only:
+`ProcessParams` is the SDK's validated parameter type; `toSpec` also accepts it with
+`| undefined` on each optional field, which is how the route's Zod schema types an omitted
+field (decision 45). `toSpec` applies defaults only:
 `crop` to `fit`, `quality` to `DEFAULT_QUALITY`, `format` to `'source'`. Range validation
 has already happened in the route. `cacheKey` is pure and total.
 

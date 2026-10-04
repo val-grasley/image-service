@@ -12,6 +12,7 @@
     "e2e"
   ],
   "scripts": {
+    "dev": "npm run dev -w @image-service/api",
     "build": "tsc -b",
     "lint": "eslint .",
     "format": "prettier --write .",

@@ -26,9 +26,17 @@ describe('ServiceError', () => {
     expect(error.rateLimit).toBe(rateLimit);
   });
 
+  it('carries the methods a path allows', () => {
+    const error = new ServiceError('method_not_allowed', 'POST is not supported.', {
+      allow: ['GET', 'HEAD'],
+    });
+    expect(error.allow).toEqual(['GET', 'HEAD']);
+  });
+
   it('leaves the extras undefined when none are given', () => {
     const error = new ServiceError('not_found', 'No such path.');
-    expect([error.fields, error.upstreamStatus, error.rateLimit]).toEqual([
+    expect([error.fields, error.upstreamStatus, error.rateLimit, error.allow]).toEqual([
+      undefined,
       undefined,
       undefined,
       undefined,

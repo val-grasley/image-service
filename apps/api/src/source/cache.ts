@@ -1,8 +1,9 @@
 import { ByteLru, type Clock } from '../cache/lru.ts';
 import type { Config } from '../config.ts';
+import type { FetchedSource } from './fetcher.ts';
 
-export class SourceCache<V extends { bytes: Uint8Array }> {
-  readonly #lru: ByteLru<V>;
+export class SourceCache {
+  readonly #lru: ByteLru<FetchedSource>;
 
   constructor(limits: Pick<Config, 'sourceCacheMaxBytes' | 'sourceCacheTtlSeconds'>, clock: Clock) {
     this.#lru = new ByteLru({
@@ -13,11 +14,11 @@ export class SourceCache<V extends { bytes: Uint8Array }> {
     });
   }
 
-  get(url: URL): V | undefined {
+  get(url: URL): FetchedSource | undefined {
     return this.#lru.get(url.href);
   }
 
-  set(url: URL, source: V): void {
+  set(url: URL, source: FetchedSource): void {
     this.#lru.set(url.href, source);
   }
 }

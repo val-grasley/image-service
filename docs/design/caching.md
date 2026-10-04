@@ -110,6 +110,9 @@ function processImage(spec: TransformSpec, ifNoneMatch: readonly string[], deps:
 5. Transform, build `CachedResult`, `resultCache.set`, return the image with
    `fromCache: false`.
 
+Step 0 is `admitUrl` and steps 2 and 3 are `loadSource`, both in `operations/load-source.ts`,
+because `describeSource` runs the same check and the same steps for `/info`.
+
 `ifNoneMatch` matching: the header is split on commas, each entry trimmed; a `W/` prefix is
 stripped (weak comparison is acceptable for a 304 on GET); `*` matches any. The route
 parses the header into the list; the operation only compares strings.
