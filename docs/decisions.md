@@ -365,3 +365,15 @@ key, destroying sharing; and the brief wants the UI to call the API as any publi
 would. Signed URLs are the right mechanism and are a listed next step.
 **Consequences:** The service is an open proxy bounded by rate limiting and reserved
 concurrency, and the README says so.
+
+## 30. Problem details for routing errors too
+
+**Date:** 2026-10-03
+**Context:** A request for an unknown path or an unsupported method on a known path is an
+error the service produces, and section 7 promises every such error is problem details.
+**Decision:** 404 `not_found` for unknown paths; 405 `method_not_allowed` with an `Allow`
+header for a known path and unsupported method. Both are problem details with `no-store`.
+**Rejected:** Hono's default plain-text 404 for both cases: inconsistent with the contract,
+and a wrong-method request would be indistinguishable from a wrong path.
+**Consequences:** The HTTP design document fixes how 405 is produced, since Hono does not
+distinguish the two cases by default.

@@ -2,7 +2,7 @@
 
 This document is the top-level design for the image processing service. It fixes what every
 subsystem depends on: deployment shape, repository layout, request lifecycle, the fetch
-policy, module seams, the public contract, and limits. Subsystem documents under
+policy, module seams, the public contract, and limits. Design documents under
 `docs/design/` go deeper only where there are further decisions to make; their status is
 listed in section 11. `docs/decisions.md` records why each choice was made and what was
 rejected.
@@ -94,11 +94,13 @@ directory's statement.
 ```
 .
 ├── AGENTS.md                 Agent guidelines. Canonical; CLAUDE.md imports it.
+├── CLAUDE.md                 One line: an import of AGENTS.md.
+├── .claude/skills/           One directory per skill, each holding SKILL.md. Loaded on demand.
 ├── README.md
 ├── docs/
 │   ├── architecture.md       This document.
 │   ├── decisions.md          Decision log.
-│   └── design/               Subsystem documents (section 11).
+│   └── design/               One design document per subsystem (section 11).
 ├── apps/
 │   ├── api/
 │   │   ├── src/
@@ -128,8 +130,9 @@ directory's statement.
 │   │   └── test/                 Integration tests against the app, and their helpers.
 │   └── web/
 │       ├── index.html
+│       ├── favicon.ico
 │       ├── styles.css
-│       ├── build.ts              esbuild script: bundle, copy static files to dist/.
+│       ├── build.ts              esbuild script: bundle to dist/assets/, copy index.html and favicon.ico to dist/.
 │       └── src/
 │           ├── main.ts           Wiring: DOM events → state transitions → render.
 │           ├── state.ts          State type and transitions. Pure.
@@ -141,7 +144,7 @@ directory's statement.
 │   │   ├── transform.ts          Parameter types, crop modes, formats, canonical URL builder.
 │   │   ├── errors.ts             Error code union, ProblemDetails type, ImageApiError.
 │   │   └── client.ts             fetch-based client returning typed results and errors.
-│   └── fake-upstream/src/        Dev-only HTTP server of test scenarios, used by api tests and e2e.
+│   └── fake-upstream/src/        Dev-only. Generates test images and serves them through scenario routes; used by api tests and e2e.
 ├── infra/                        CDK application: bin/app.ts and lib/.
 └── e2e/                          Playwright tests against the full local stack.
 ```
@@ -200,6 +203,7 @@ change these rules.
 
 - Scheme is `http` or `https`. Port is 80 or 443, explicit or implied.
 - No userinfo (`user:pass@`).
+- Hostnames are compared after lowercasing and removing one trailing dot.
 - Host is not an IP literal in a blocked range (below), and is not a hostname in
   `PUBLIC_HOSTS` (the service's own CloudFront and Function URL hostnames), `localhost`, or
   the `.local`, `.internal`, or `.localhost` suffixes.
@@ -219,11 +223,11 @@ change these rules.
 
 ### Connection rules
 
-- DNS is resolved once per hop by the fetcher. Every returned address is checked. The
-  connection is made only to checked addresses, by supplying a custom `lookup` to the
-  undici agent that returns the validated list. The hostname is still used for SNI, the
-  `Host` header, and certificate validation. There is no second resolution, so there is no
-  rebinding window.
+- DNS is resolved once per hop by the fetcher. Every returned address is checked, and one
+  blocked address denies the whole fetch. The connection is made only to checked addresses,
+  by supplying a custom `lookup` to the undici agent that returns the validated list. The
+  hostname is still used for SNI, the `Host` header, and certificate validation. There is no
+  second resolution, so there is no rebinding window.
 - Connect timeout `FETCH_CONNECT_TIMEOUT_MS`. `FETCH_TOTAL_TIMEOUT_MS` is the budget for the
   entire redirect chain including body download.
 - Redirects are not auto-followed. 301, 302, 303, 307, and 308 are followed manually, at most
@@ -282,6 +286,9 @@ infrastructure have their own needs for `fetch`, `console`, and `process.env`.
 | `sharp` | `image/pipeline.ts` |
 | `process.env` | `config.ts` |
 | `console` | `observability/logger.ts` |
+
+Test files (`*.test.ts` and `apps/api/test/`) are exempt from the `sharp` restriction only,
+for reading metadata back from outputs. Fixtures come from the fake upstream's generator.
 
 Two interfaces have more than one implementation by design: `RateLimiter` (memory, DynamoDB)
 and `ResultCache` (memory now; a shared store is a documented next step). No other interface
@@ -389,6 +396,8 @@ Validation errors add `errors: [{ field, message }]`.
 | Too many redirects | 502 | `too_many_redirects` |
 | Upstream exceeded the fetch budget | 504 | `upstream_timeout` |
 | Transform exceeded its budget (sharp reports this as an error whose message contains `timeout`) | 500 | `transform_timeout` |
+| Unknown path | 404 | `not_found` |
+| Known path, unsupported method | 405 | `method_not_allowed`, with `Allow` |
 | Unexpected failure | 500 | `internal_error`, no internal detail |
 
 413 and 415 describe fetched content rather than the request body, which is a proxy
@@ -479,7 +488,7 @@ logger setup, the request-id middleware, the loop-guard middleware, the esbuild 
 | `design/caching.md` | To write: LRU accounting, ETag computation order |
 | `design/rate-limiting.md` | To write: DynamoDB window algorithm, TTL, key shape |
 | `design/image-pipeline.md` | To write: crop mode to sharp `fit` mapping, encoder options |
-| `design/infrastructure.md` | To write: stack resources, forwarded-header list as load-bearing, `PUBLIC_HOSTS` and the custom-domain option, bundling recipe, deploy steps |
+| `design/infrastructure.md` | To write: stack resources, forwarded-header list as load-bearing, `PUBLIC_HOSTS` and the custom-domain option, bundling recipe, invalidation tied to the function asset so an API-only deploy refreshes `/docs`, deploy steps |
 | `design/observability.md`, `design/sdk.md`, `design/ui.md` | To write; each a page or less. Observability covers log shape and request-ID propagation only |
 
 This document does not govern implementation until the design documents it cites exist.
