@@ -331,7 +331,7 @@ This section is the contract the design document must not contradict.
 | `url` | string | required | Section 5 |
 | `width`, `height` | integer | none | 1 to `MAX_OUTPUT_DIMENSION`; product at most `MAX_OUTPUT_PIXELS`; one may be omitted to keep aspect |
 | `crop` | `fit`, `fill`, `scale`, `pad` | `fit` | `fit` never enlarges; the others produce the exact requested size and may enlarge |
-| `format` | `jpeg`, `png`, `webp`, `avif` | source format; `png` for TIFF sources | |
+| `format` | `jpeg`, `png`, `webp`, `avif` | source format; `png` for TIFF and GIF sources | |
 | `quality` | integer 1 to 100 | `DEFAULT_QUALITY` | Passed to lossy encoders only; not passed to the PNG or GIF encoders |
 
 Animated inputs contribute their first frame. AVIF encoding uses a fixed low effort so encode

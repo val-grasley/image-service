@@ -62,7 +62,8 @@ the one place in the repository where that is required.
 ## Canonical URLs
 
 `processUrl` emits query parameters in the fixed order `url, width, height, crop, format,
-quality`, omits undefined ones, and does not add defaults. Two calls with the same
+quality`, omits undefined ones, and does not add defaults. The endpoint path replaces any
+path on `baseUrl`, so `https://host/api/` and `https://host/` both yield `/process`. Two calls with the same
 parameters produce byte-identical URLs regardless of the object's key order, which is what
 gives SDK users shared CloudFront cache entries (decision 11). It performs no range
 validation; the API does, and the error comes back typed.
