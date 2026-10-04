@@ -1,0 +1,26 @@
+{
+  "name": "@image-service/fake-upstream",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./generator": {
+      "types": "./dist/generator.d.ts",
+      "import": "./dist/generator.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    }
+  },
+  "bin": {
+    "fake-upstream": "./src/cli.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@image-service/sdk": "0.1.0",
+    "sharp": "0.35.5"
+  }
+}

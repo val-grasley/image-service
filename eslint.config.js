@@ -32,14 +32,7 @@ export default defineConfig([
   {
     languageOptions: {
       parserOptions: {
-        project: [
-          './tsconfig.tooling.json',
-          './apps/*/tsconfig.json',
-          './apps/*/tsconfig.test.json',
-          './packages/*/tsconfig.json',
-          './packages/*/tsconfig.test.json',
-          './*/tsconfig.json',
-        ],
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },

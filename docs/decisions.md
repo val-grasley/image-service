@@ -395,7 +395,8 @@ pinning. `pino` for logging: the logger is under eighty lines and every field is
 a dependency buys nothing. `file-type` for sniffing: six signatures in a table. Scalar instead
 of `@hono/swagger-ui` for the docs page: either works; the Hono-org package keeps the
 dependency set in one family.
-**Consequences:** Nine runtime dependencies in the API, all pinned exactly.
+**Consequences:** Nine runtime dependencies in the API, all pinned exactly. Workspace
+packages (`@image-service/sdk`) are not counted.
 
 ## 32. Fixed-window rate limiting that fails open
 
@@ -437,4 +438,24 @@ decision 18 made load-bearing. TypeScript 6.0: inside the lint range but adds de
 errors for no benefit here.
 **Consequences:** Relative imports use `.ts` specifiers with `rewriteRelativeImportExtensions`
 so the same source runs under Node's native type stripping and compiles with `tsc`.
+
+## 35. One typecheck project per workspace, plus a build project where it emits
+
+**Date:** 2026-10-03
+**Context:** The scaffold used `tsconfig.json` for emit (sources only) and `tsconfig.test.json`
+for tests, with ESLint given an explicit glob list of projects. Adding the remaining
+workspaces showed two problems: typescript-eslint parses every project its globs match, so
+an empty workspace is a hard error for every file; and the project service, which avoids
+that, resolves the nearest `tsconfig.json` and so needs that file to include tests.
+**Decision:** Each workspace's `tsconfig.json` typechecks sources and tests with `noEmit`;
+workspaces that emit (sdk, fake-upstream, api) add `tsconfig.build.json`. ESLint uses the
+project service. The root `tsconfig.json` references every project that builds today.
+**Rejected:** The explicit project list: breaks on empty workspaces and must be edited for
+every new one. A separate Node-typed project for `apps/web/build.ts`: the UI's one tsconfig
+gives browser sources Node types too, which would let `Buffer` or `process` typecheck and
+fail in the browser. Separating them needs a solution-style web tsconfig plus two leaf
+configs for one build script; that cost was judged not worth it for a single page reviewed
+by hand.
+**Consequences:** Sources are typechecked twice where a build project exists, which is cheap
+at this size. Commits that create a workspace's first source add its references.
 

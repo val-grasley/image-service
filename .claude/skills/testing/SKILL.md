@@ -21,7 +21,7 @@ design document ends with its own test plan, which is the minimum for that subsy
 | Integration | `apps/api/test/` | The Hono app in-process via `app.request()` |
 | End-to-end | `e2e/tests/` | The built UI and a local API in Chromium |
 
-Test files are typechecked by `tsc -b` through each workspace's test tsconfig, so a type
+Test files are typechecked by `tsc -b` through each workspace's `tsconfig.json`, so a type
 error in a test fails preflight. Type-level locks use Vitest's `expectTypeOf`.
 
 ## Config in tests

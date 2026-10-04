@@ -70,4 +70,8 @@ Unknown paths are 404. The server sets no `Cache-Control`.
   CLI entry, then the API with `ALLOWED_HOSTS` pointing at it. There is no `globalSetup`.
 - Pipeline unit tests: `generateImage` directly, no server.
 
-A CLI entry (`fake-upstream --port N`) exists only for Playwright's `webServer` command.
+The package exposes two subpaths, `@image-service/fake-upstream/generator` and
+`@image-service/fake-upstream/server`, named for their concepts; there is no index barrel.
+A CLI entry (`fake-upstream --port N`, the manifest's `bin` pointing at `src/cli.ts` so npm
+links it at install time and Node runs it through type stripping) exists only for
+Playwright's `webServer` command.
