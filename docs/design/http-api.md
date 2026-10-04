@@ -120,8 +120,8 @@ source cache), sniffs, and inspects. Responds with JSON
 `SourceType`, and `Cache-Control: public, max-age=<SOURCE_CACHE_TTL_SECONDS>`.
 
 **`GET /health`.** `{ status: 'ok', version }` from the service version the entry passes to
-`createApp` (decision 44), `Cache-Control: no-store`. No dependencies are checked; the function is healthy if it can
-answer.
+`createApp` (decision 44), `Cache-Control: no-store`. No dependencies are checked; the
+function is healthy if it can answer.
 
 **`GET /openapi.json`, `GET /docs`.** Section "OpenAPI" below.
 
@@ -156,12 +156,13 @@ variables the route handlers and `onError` set; a 5xx line is at `error` with th
 
 ## OpenAPI
 
-`http/openapi.ts` calls `app.doc31('/openapi.json', { openapi: '3.1.0', info: { title, version }, servers: [] })`
-and registers the shared `ProblemDetails` schema and one response component per error code
-so each route lists exactly the codes it can produce. `/docs` is a small HTML page assembled
-in the route file: a heading, an "Errors" section with one `<section id="error-<code>">`
-per code giving status, title, and a sentence, and the Swagger UI component from
-`@hono/swagger-ui` pointed at `/openapi.json`. Both carry `Cache-Control: public, max-age=3600`.
+`http/openapi.ts` calls `app.doc31('/openapi.json', { openapi: '3.1.0', info: { title,
+version }, servers: [] })` and registers the shared `ProblemDetails` schema and one response
+component per error code so each route lists exactly the codes it can produce. `/docs` is a
+small HTML page assembled in the route file: a heading, an "Errors" section with one
+`<section id="error-<code>">` per code giving status, title, and a sentence, and the Swagger
+UI component from `@hono/swagger-ui` pointed at `/openapi.json`. Both carry `Cache-Control:
+public, max-age=3600`.
 
 A route's responses are keyed by status, and two codes can share one (`internal_error` and
 `transform_timeout` at 500, `upstream_error` and `too_many_redirects` at 502). Where a route
@@ -169,12 +170,13 @@ can produce only one code at a status, its response is a `$ref` to that code's c
 where it can produce several, its response is one inline problem response whose description
 names each code (decision 46). Every problem response's schema is
 `allOf: [ProblemDetails, { properties: { code: { enum: [...] } } }]`, narrowed to the codes
-it can carry, so a client can read them from the schema rather than the prose. `/openapi.json` gets its `Cache-Control` from a middleware
-that sets it on a 200 only, because `doc31` registers its own handler. The sentence per code
-on `/docs` lives in `http/routes/docs.ts`. The Swagger UI component loads its script and
-stylesheet from the jsDelivr CDN, the package's default, at a pinned `swagger-ui-dist`
-version (5.33.1), because without one the package loads the latest release and the page would
-change underneath a deployment.
+it can carry, so a client can read them from the schema rather than the prose.
+`/openapi.json` gets its `Cache-Control` from a middleware that sets it on a 200 only,
+because `doc31` registers its own handler. The sentence per code on `/docs` lives in
+`http/routes/docs.ts`. The Swagger UI component loads its script and stylesheet from the
+jsDelivr CDN, the package's default, at a pinned `swagger-ui-dist` version (5.33.1), because
+without one the package loads the latest release and the page would change underneath a
+deployment.
 
 ## Tests
 

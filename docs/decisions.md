@@ -692,3 +692,34 @@ An API that adds an error code, source type, or output format must ship with an 
 knows it; an older SDK reports the new code as `internal_error` with the body text and
 rejects a `/info` body with the new source type. In this repository the UI bundles the SDK
 from the same commit, so they ship together.
+
+## 48. The form asks `main.ts` to submit, and the page is mounted once
+
+**Date:** 2026-10-04
+**Context:** `design/ui.md` gave `render(state, root, dispatch)` listeners that call
+`dispatch`, and had `main.ts` create the `AbortController` and the request URL that the
+`submit` event carries, so the form's listener had no event it could dispatch without
+creating them itself. The same document had `render` rebuild the dynamic regions on every
+call; since every keystroke is a `field` event, a rebuilt form loses the input being typed
+in, and a rebuilt copy button loses the focus a keyboard user just gave it. `run(form,
+signal)` had no client to call and no request URL to put in its event.
+**Decision:** `render.ts` exports `mount(root, dispatch)`, which builds the page once and
+returns an update function closed over its elements and the last phase it rendered; each
+update changes only text, attributes, and the children of the regions derived from the
+phase, and those only when the phase object changed. `main.ts` holds the update function,
+never element references. `dispatch` takes an `Event` or `{ type: 'submit-requested' }`,
+and `main.ts` turns the latter into `submit`. `run` takes the client and the request URL
+from `main.ts`. `reduce` settles a `loading` phase only with an event whose `requestUrl` is
+the same object, so a replaced request's abort failure is dropped in the pure function
+rather than by a check in `main.ts`; `requestUrl` is therefore always a `URL` on `error`
+and `failed`. `effectsFor` lives in `state.ts`, since importing `main.ts` starts the page.
+**Rejected:** Creating the URL and controller in `render.ts`: it would need the base URL and
+`paramsFromForm`, which the design gives to `main.ts`. A second channel beside `dispatch`
+for submit. Keeping `render(state, root, dispatch)` with element references in a
+module-level map keyed by the root: the same behavior with hidden module state and a
+first-call branch. Rebuilding everything and restoring focus by element ID: it loses the
+caret position and composition state and still reloads the images. Dropping stale results
+in `main.ts` by checking `signal.aborted`: correct, but untested without a DOM.
+**Consequences:** The update function holds mutable state, the last rendered phase.
+Phase-derived regions depend on `reduce` returning the same phase object for events that do
+not change it, which the state tests assert.

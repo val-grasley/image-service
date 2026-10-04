@@ -98,7 +98,8 @@ directory's statement.
 ├── .claude/skills/           One directory per skill, each holding SKILL.md. Loaded on demand.
 ├── README.md
 ├── package.json              Workspace root: scripts and dev dependencies. Beside it: lockfile, .npmrc, .node-version,
-│                             tsconfig.base.json and the root tsconfig.json of references, eslint.config.js, vitest.config.ts, Prettier config.
+│                             tsconfig.base.json and the root tsconfig.json of references, eslint.config.js, vitest.config.ts, Prettier config,
+│                             and dev.ts, the `npm run dev` launcher that runs the SDK, UI, and API watches and stops them together.
 │                             Each workspace has tsconfig.json (typecheck of sources and tests) and, where it emits, tsconfig.build.json.
 ├── docs/
 │   ├── architecture.md       This document.

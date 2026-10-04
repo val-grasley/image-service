@@ -24,6 +24,9 @@
     },
     {
       "path": "infra"
+    },
+    {
+      "path": "apps/web"
     }
   ]
 }

@@ -12,8 +12,8 @@
     "e2e"
   ],
   "scripts": {
-    "dev": "npm run dev -w @image-service/api",
-    "build": "tsc -b",
+    "dev": "node dev.ts",
+    "build": "tsc -b && npm run build --workspace apps/web",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
