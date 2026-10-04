@@ -129,7 +129,7 @@ directory's statement.
 │   │   │   │   ├── spec.ts       TransformSpec: parsing, defaults, canonical form, cache key.
 │   │   │   │   └── pipeline.ts   Sole importer of sharp. TransformSpec + bytes → bytes + metadata.
 │   │   │   ├── cache/            ByteLru (shared by both caches), ResultCache interface and memory implementation.
-│   │   │   ├── rate-limit/       RateLimiter interface, memory and DynamoDB implementations.
+│   │   │   ├── rate-limit/       RateLimiter interface, memory and DynamoDB implementations, client key derivation.
 │   │   │   └── observability/    logger.ts. The only writer to stdout.
 │   │   └── test/                 Integration tests against the app, and their helpers.
 │   └── web/

@@ -75,7 +75,11 @@ The middleware is attached to `/process` and `/info` only. `/health`, `/openapi.
 
 ## Client identity
 
-`http/middleware/rate-limit.ts` derives the key:
+`rate-limit/client-key.ts` derives the key as a pure function,
+`clientKey({ remoteAddress, headers }, { clientIpSource, trustedProxyCount })`, so every
+row below is tested without a request (decision 37). `http/middleware/rate-limit.ts` calls
+it with `c.env.incoming.socket.remoteAddress` and a header lookup over `c.req.header`, and
+does nothing else with addresses.
 
 | `CLIENT_IP_SOURCE` | Source |
 |---|---|
@@ -83,8 +87,14 @@ The middleware is attached to `/process` and `/info` only. `/health`, `/openapi.
 | `x-forwarded-for` | the entry `TRUSTED_PROXY_COUNT` from the right of `X-Forwarded-For` |
 | `cloudfront` | `CloudFront-Viewer-Address` with the port removed by splitting on the last colon and stripping brackets |
 
-An IPv6 address is masked to its /64 before use as the key. If the configured source yields
-no address (header missing), the key is `unknown` and the request is limited as one shared
+An IPv6 address is masked to its /64 before use as the key, written as its first four groups
+in lowercase hex without leading zeros followed by `::/64` (`2001:db8:0:aa::/64`), so every
+spelling of one prefix gives one key. A zone index (`%eth0`) is dropped first. An IPv4-mapped
+address (`::ffff:203.0.113.9`, which a dual-stack socket reports for an IPv4 client) is keyed
+as the IPv4 address it carries, since its /64 would hold every IPv4 client. If the configured
+source yields no address (header missing, fewer `X-Forwarded-For` entries than
+`TRUSTED_PROXY_COUNT` plus one, a viewer address without a port) or yields text that
+`node:net`'s `isIP` rejects, the key is `unknown` and the request is limited as one shared
 client, which fails closed rather than open. Hono's `getConnInfo` is not used.
 
 ## Response
@@ -115,7 +125,9 @@ narrower hand-written policy is not worth departing from the grant helpers for.
   start and one second before its end.
 - DynamoDB: the command shape (expression, key, TTL value) is asserted from the fake's
   recorded input; count at the limit allows, above denies; a rejected `send` allows and logs.
-- Middleware: each `CLIENT_IP_SOURCE` mode derives the expected key from crafted headers;
-  the rightmost rule with `TRUSTED_PROXY_COUNT` 0 and 1; an IPv6 address masks to /64; a
-  missing header yields `unknown`; 429 carries the three headers and `no-store`; 200
-  responses carry none of the rate-limit headers.
+- Client key (`client-key.test.ts`, table-driven): each `CLIENT_IP_SOURCE` mode derives
+  the expected key from crafted headers; the rightmost rule with `TRUSTED_PROXY_COUNT` 0
+  and 1; an IPv6 address masks to /64; an IPv4-mapped address keys as IPv4; a missing
+  header yields `unknown`.
+- Middleware: the key reaches the limiter from the request; 429 carries the three headers
+  and `no-store`; 200 responses carry none of the rate-limit headers.

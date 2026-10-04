@@ -1,11 +1,5 @@
 import type { ErrorCode, ProblemDetails } from '@image-service/sdk';
-
-type RateLimitDecision = {
-  allowed: boolean;
-  limit: number;
-  remaining: number;
-  resetSeconds: number;
-};
+import type { RateLimitDecision } from './rate-limit/limiter.ts';
 
 export class ServiceError extends Error {
   override name = 'ServiceError';

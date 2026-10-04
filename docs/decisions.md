@@ -475,3 +475,21 @@ reasons unrelated to the code it tests.
 **Consequences:** Oriented fixtures are JPEG, PNG, WebP, or TIFF; transparent fixtures are
 PNG, WebP, or AVIF. A test of flattening onto an opaque output starts from one of the
 transparent formats.
+
+## 37. The rate-limit client key is a pure module the middleware calls
+
+**Date:** 2026-10-04
+**Context:** The rate-limiting design placed client-key derivation inside the HTTP
+middleware. The derivation carries the security-relevant rules (rightmost `X-Forwarded-For`
+entry with a trusted count, the CloudFront port split, IPv6 /64 masking, `unknown` on no
+address), and the limiter landed before the middleware.
+**Decision:** `rate-limit/client-key.ts` exports `clientKey`, a pure function of the socket
+address, a header lookup, and `CLIENT_IP_SOURCE` and `TRUSTED_PROXY_COUNT`. The middleware
+is its caller. Two details the design left open are fixed there: an IPv4-mapped IPv6 address
+is keyed as its IPv4 address, and text that is not an IP address yields `unknown`.
+**Rejected:** Deriving the key inline in the middleware: every rule would be testable only by
+building a request through the app, and the table of cases would be buried among the 429
+header tests.
+**Consequences:** The derivation's tests are a table over `clientKey`; the middleware's tests
+cover only wiring and the response. Without the IPv4-mapped rule, a server listening on a
+dual-stack socket would put every IPv4 client in the one bucket `0:0:0:0::/64`.
