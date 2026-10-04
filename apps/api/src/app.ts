@@ -10,6 +10,8 @@ import { invalidParameters, toProblem } from './http/errors.ts';
 import { loopGuard } from './http/middleware/loop-guard.ts';
 import { rateLimit } from './http/middleware/rate-limit.ts';
 import { requestId } from './http/middleware/request-id.ts';
+import { addOpenApiDocument } from './http/openapi.ts';
+import { addDocsRoute } from './http/routes/docs.ts';
 import { addHealthRoute } from './http/routes/health.ts';
 import { addInfoRoute } from './http/routes/info.ts';
 import { addProcessRoute } from './http/routes/process.ts';
@@ -70,6 +72,8 @@ export function createApp(
   addProcessRoute(app, config, deps);
   addInfoRoute(app, config, deps);
   addHealthRoute(app, serviceVersion);
+  addOpenApiDocument(app, serviceVersion);
+  addDocsRoute(app);
   refuseOtherMethods(app);
 
   app.notFound((c) => {

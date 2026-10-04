@@ -4,7 +4,7 @@ import type { ZodError } from 'zod';
 import { ServiceError } from '../errors.ts';
 import { WINDOW_MS } from '../rate-limit/limiter.ts';
 
-const STATUS: Record<ErrorCode, { status: ContentfulStatusCode; title: string }> = {
+export const STATUS: Record<ErrorCode, { status: ContentfulStatusCode; title: string }> = {
   invalid_parameter: { status: 400, title: 'Invalid parameter' },
   url_not_allowed: { status: 403, title: 'URL not allowed' },
   not_found: { status: 404, title: 'Not found' },
@@ -19,6 +19,10 @@ const STATUS: Record<ErrorCode, { status: ContentfulStatusCode; title: string }>
   too_many_redirects: { status: 502, title: 'Too many redirects' },
   upstream_timeout: { status: 504, title: 'Upstream timeout' },
 };
+
+export const ERROR_CODES = Object.keys(STATUS).filter((key): key is ErrorCode =>
+  Object.hasOwn(STATUS, key),
+);
 
 type Problem = {
   status: ContentfulStatusCode;

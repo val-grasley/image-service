@@ -638,3 +638,24 @@ only for the type checker. A `.transform()` producing `ProcessParams`: its annot
 satisfy the type lock by itself and defeat it.
 **Consequences:** The type lock in `process-query.test.ts` still compares the schema's own
 output, through `Normalize`, against `ProcessParams`.
+
+## 46. Codes that share a status on one route share one OpenAPI response
+
+**Date:** 2026-10-04
+**Context:** The HTTP design registers one response component per error code so that each
+route lists exactly the codes it can produce. OpenAPI keys a route's responses by status,
+one response per status, and on `/process` two pairs of codes share a status (500 and 502),
+as on `/info` one pair does (502). Two components cannot both be referenced at one status.
+**Decision:** Every code still has its component. A route refers to a code's component when
+that code is the only one it can produce at that status; otherwise the route has one inline
+`application/problem+json` response at that status whose description names each code, for
+example `Upstream error (upstream_error) or Too many redirects (too_many_redirects).` Every
+problem response, component or inline, has the schema
+`allOf: [ProblemDetails, { properties: { code: { enum: [...] } } }]` with the enum narrowed
+to the codes it can carry, so the code set is machine-readable.
+**Rejected:** Per-code schema components combined with `oneOf` at the shared status: the
+codes differ only in the `code` value, which the narrowed enum already states. The
+description alone: only prose would say which codes a status admits. Listing only one of
+the codes: the document would omit a code the route produces.
+**Consequences:** `not_found` and `method_not_allowed` have components that no operation
+references, since no GET operation produces them; `/docs` lists every code regardless.

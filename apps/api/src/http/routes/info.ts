@@ -3,6 +3,7 @@ import type { Config } from '../../config.ts';
 import type { OperationDeps } from '../../operations/deps.ts';
 import { describeSource } from '../../operations/describe-source.ts';
 import type { AppEnv } from '../context.ts';
+import { problemResponses } from '../openapi.ts';
 import { sourceUrlParam } from './process.ts';
 
 const sourceInfo = z
@@ -32,6 +33,17 @@ export function addInfoRoute(app: OpenAPIHono<AppEnv>, config: Config, deps: Ope
         description: 'Metadata of the source image.',
         content: { 'application/json': { schema: sourceInfo } },
       },
+      ...problemResponses([
+        'invalid_parameter',
+        'url_not_allowed',
+        'source_too_large',
+        'unsupported_source_type',
+        'rate_limited',
+        'internal_error',
+        'upstream_error',
+        'too_many_redirects',
+        'upstream_timeout',
+      ]),
     },
   });
   const cacheControl = `public, max-age=${String(config.sourceCacheTtlSeconds)}`;

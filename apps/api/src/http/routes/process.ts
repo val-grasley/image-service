@@ -4,6 +4,7 @@ import { toSpec } from '../../image/spec.ts';
 import type { OperationDeps } from '../../operations/deps.ts';
 import { processImage } from '../../operations/process-image.ts';
 import type { AppEnv } from '../context.ts';
+import { problemResponses } from '../openapi.ts';
 
 export const sourceUrlParam = z.url({ error: 'must be an absolute URL' }).openapi({
   description: 'Absolute http or https URL of the source image.',
@@ -87,6 +88,19 @@ export function addProcessRoute(
         },
       },
       304: { description: 'The image named by If-None-Match is unchanged.' },
+      ...problemResponses([
+        'invalid_parameter',
+        'url_not_allowed',
+        'source_too_large',
+        'unsupported_source_type',
+        'output_too_large',
+        'rate_limited',
+        'internal_error',
+        'transform_timeout',
+        'upstream_error',
+        'too_many_redirects',
+        'upstream_timeout',
+      ]),
     },
   });
   const cacheControl = `public, max-age=${String(config.resultCacheTtlSeconds)}`;

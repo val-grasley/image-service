@@ -1,5 +1,6 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../context.ts';
+import { problemResponses } from '../openapi.ts';
 
 const health = z.object({ status: z.literal('ok'), version: z.string() });
 
@@ -13,6 +14,7 @@ export function addHealthRoute(app: OpenAPIHono<AppEnv>, version: string): void 
         description: 'The service is running.',
         content: { 'application/json': { schema: health } },
       },
+      ...problemResponses(['url_not_allowed', 'internal_error']),
     },
   });
 

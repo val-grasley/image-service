@@ -1,5 +1,6 @@
-import type { ProcessParams, SourceInfo } from '@image-service/sdk';
+import type { ProblemDetails, ProcessParams, SourceInfo } from '@image-service/sdk';
 import { describe, expectTypeOf, it } from 'vitest';
+import type { ProblemDetailsBody } from '../openapi.ts';
 import type { InfoResponse } from './info.ts';
 import type { ProcessQuery } from './process.ts';
 
@@ -14,5 +15,9 @@ describe('route schemas are locked to the SDK types', () => {
 
   it('the /info response equals SourceInfo', () => {
     expectTypeOf<Normalize<InfoResponse>>().toEqualTypeOf<Normalize<SourceInfo>>();
+  });
+
+  it('the documented problem body equals ProblemDetails', () => {
+    expectTypeOf<Normalize<ProblemDetailsBody>>().toEqualTypeOf<Normalize<ProblemDetails>>();
   });
 });

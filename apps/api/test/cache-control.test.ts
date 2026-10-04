@@ -16,6 +16,7 @@ afterAll(async () => {
 const config = testConfig();
 const RESULT = `public, max-age=${String(config.resultCacheTtlSeconds)}`;
 const SOURCE = `public, max-age=${String(config.sourceCacheTtlSeconds)}`;
+const DOCUMENTATION = 'public, max-age=3600';
 
 describe('Cache-Control', () => {
   const image = () => query('/process', { url: sourceUrl(fake, '/image/png'), width: '8' });
@@ -52,6 +53,20 @@ describe('Cache-Control', () => {
       name: 'a 502',
       path: () => query('/info', { url: sourceUrl(fake, '/status/500') }),
       status: 502,
+      expected: 'no-store',
+    },
+    {
+      name: 'GET /openapi.json',
+      path: () => '/openapi.json',
+      status: 200,
+      expected: DOCUMENTATION,
+    },
+    { name: 'GET /docs', path: () => '/docs', status: 200, expected: DOCUMENTATION },
+    {
+      name: 'POST /openapi.json',
+      path: () => '/openapi.json',
+      init: { method: 'POST' },
+      status: 405,
       expected: 'no-store',
     },
     { name: 'an unknown path', path: () => '/nothing-here', status: 404, expected: 'no-store' },
