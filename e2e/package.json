@@ -7,6 +7,8 @@
     "test": "playwright test"
   },
   "devDependencies": {
+    "@image-service/fake-upstream": "0.1.0",
+    "@image-service/sdk": "0.1.0",
     "@playwright/test": "1.63.0"
   }
 }

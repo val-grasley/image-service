@@ -723,3 +723,40 @@ in `main.ts` by checking `signal.aborted`: correct, but untested without a DOM.
 **Consequences:** The update function holds mutable state, the last rendered phase.
 Phase-derived regions depend on `reduce` returning the same phase object for events that do
 not change it, which the state tests assert.
+
+## 49. Each copy button is described by its status; the request text stays unnamed
+
+**Date:** 2026-10-04
+**Context:** `design/ui.md` puts one `aria-live` status beside each copy button but gave
+nothing that ties a status to its button, so assistive technology that revisits a button
+cannot tell which copy succeeded, and the end-to-end suite, which locates by role and
+label only, could not assert which indicator showed. A review also noted that the request
+URL and curl `code` elements have no accessible names.
+**Decision:** Each copy button names its status element in `aria-describedby`, the pattern
+the inputs already use for their field errors. The `code` elements stay unnamed: ARIA 1.2
+prohibits `aria-label` and `aria-labelledby` on the `code` role, and Playwright computes no
+name for it (a probe page showed `getByRole('code', { name })` matching neither attribute).
+The suite locates them as the `code` elements of the Request region, in order, and the
+buttons beside them carry the names.
+**Rejected:** `aria-labelledby` on the `code` elements: an ARIA authoring error that a
+checker flags and screen readers may ignore. `role="status"` on the indicators: it would
+make them locatable but still not tie each to its button. Visible captions above each
+`code`: a layout change the design did not ask for.
+**Consequences:** While the indicator shows, a copy button's accessible description is
+"Copied"; otherwise it is empty.
+
+## 50. The UI does not cache-bust a resubmission
+
+**Date:** 2026-10-04
+**Context:** The end-to-end suite found that submitting the same parameters twice never
+reaches the API the second time: `/process` answers `Cache-Control: public,
+max-age=<RESULT_CACHE_TTL_SECONDS>` and `/info` a public max-age too, so the browser answers
+from its HTTP cache. `design/ui.md` did not say whether that is intended.
+**Decision:** It is. An identical resubmission may be served from the browser's cache under
+the section 7 contract, and the UI adds no cache-busting parameter or `cache: 'no-store'`.
+**Rejected:** A cache-busting query parameter: it would make the displayed URL differ from
+`processUrl`'s output and defeat the CDN cache the canonical URL exists for. `no-store` on
+the SDK's fetch: it would turn every resubmission into an origin request and a
+rate-limit hit for no new information.
+**Consequences:** A resubmission shows the cached result without a new origin request.
+Tests that need a second origin request change a parameter.

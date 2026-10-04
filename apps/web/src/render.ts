@@ -59,8 +59,12 @@ export function mount(root: HTMLElement, dispatch: Dispatch): (state: State) => 
   ];
   const copyRows = copyTargets.map(([what, label]) => {
     const text = el('code');
-    const button = el('button', { type: 'button' }, `Copy ${label}`);
-    const status = el('span', { 'aria-live': 'polite', class: 'copied' });
+    const status = el('span', {
+      id: `copy-${what}-status`,
+      'aria-live': 'polite',
+      class: 'copied',
+    });
+    const button = el('button', { type: 'button', 'aria-describedby': status.id }, `Copy ${label}`);
     button.addEventListener('click', () => {
       void navigator.clipboard.writeText(text.textContent).then(() => {
         clearTimeout(clearing);

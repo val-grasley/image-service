@@ -1,5 +1,6 @@
 {
   "extends": "../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "types": ["node"] },
-  "include": ["tests/**/*.ts", "playwright.config.ts"]
+  "compilerOptions": { "noEmit": true, "lib": ["es2024", "dom"], "types": ["node"] },
+  "include": ["tests/**/*.ts", "playwright.config.ts", "stack.ts"],
+  "references": [{ "path": "../packages/sdk/tsconfig.build.json" }]
 }

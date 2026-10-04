@@ -151,7 +151,9 @@ directory's statement.
 │   │   └── client.ts             fetch-based client returning typed results and errors.
 │   └── fake-upstream/src/        Dev-only. Generates test images and serves them through scenario routes; used by api tests and e2e.
 ├── infra/                        CDK application: bin/app.ts and lib/.
-└── e2e/                          Playwright tests against the full local stack.
+└── e2e/                          Playwright tests against the full local stack. playwright.config.ts starts the fake
+                                  upstream and the API instances as webServer entries on the addresses in stack.ts;
+                                  tests/ holds one spec per UI state group.
 ```
 
 Unit tests live beside the code they test as `*.test.ts`. Coding rules beyond placement are

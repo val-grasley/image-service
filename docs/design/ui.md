@@ -100,16 +100,20 @@ Empty state: the panels show short guidance text and no images. Nothing is hidde
 default; disabled elements stay visible. Before the first submit the request region shows
 guidance text and its copy buttons are disabled. In the error state the original panel says
 there is no source image. The original image's `src` is the `url` parameter of the request
-URL, so editing the form after a request does not change what the panels show.
+URL, so editing the form after a request does not change what the panels show. An
+identical resubmission may be answered from the browser's HTTP cache, since `/process` and
+`/info` responses carry a public `max-age` (architecture section 7); the UI adds no
+cache-busting parameter, so the displayed URL stays the one `processUrl` builds (decision 50).
 
 ## Accessibility and layout
 
 Every input has a `label`. The error and copied regions are `aria-live="polite"`: the
 processed panel's content, which holds the loading indicator and the problem, and one
 status beside each copy button. Each input names its field-error element in
-`aria-describedby` and sets `aria-invalid` while that element has text. The
-layout is a single column at 360 px and two columns for the panels above 800 px, in
-`styles.css`, no framework. Images use `max-width: 100%`.
+`aria-describedby` and sets `aria-invalid` while that element has text. Each copy button
+names its status in `aria-describedby`, so the button is described as "Copied" while the
+indicator shows (decision 49). The layout is a single column at 360 px and two columns for
+the panels above 800 px, in `styles.css`, no framework. Images use `max-width: 100%`.
 
 ## Build
 

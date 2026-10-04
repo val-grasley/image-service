@@ -27,6 +27,9 @@
     },
     {
       "path": "apps/web"
+    },
+    {
+      "path": "e2e"
     }
   ]
 }
