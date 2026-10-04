@@ -1,6 +1,6 @@
 ---
 name: preflight
-description: Use before declaring any task done and before requesting adversarial review. The implementer's self-check: run the gates, then walk the structure and document-sync checklist, then write the change summary.
+description: "Use before declaring any task done and before requesting adversarial review. The implementer's self-check: run the gates, then walk the structure and document-sync checklist, then write the change summary."
 ---
 
 # Preflight

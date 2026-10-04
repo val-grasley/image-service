@@ -153,7 +153,11 @@ per code giving status, title, and a sentence, and the Swagger UI component from
 - `info.test.ts`: metadata for each format; the same errors as `/process` for bad URLs.
 - `errors.test.ts`: table of every `ErrorCode` through `toProblem` asserting status, title,
   content type, `no-store`, `type`; an unknown `Error` becomes `internal_error` with no
-  detail; a `ServiceError` with `cause` logs the chain.
+  detail; a `ServiceError` with `cause` logs the chain; no `detail` contains a filesystem
+  path, a stack frame, or an upstream response body (a hostname or a blocked address the
+  caller caused is fine).
+- `cache-control.test.ts`: every route, including `/openapi.json`, `/docs`, an unknown
+  path, and a wrong method, carries the `Cache-Control` value section 7 assigns it.
 - `routing.test.ts`: unknown path is 404 problem; `POST /process` is 405 with `Allow`;
   `/health` shape and `no-store`; `/openapi.json` lists the three paths and every parameter;
   `/docs` contains an anchor for every error code.

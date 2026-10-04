@@ -35,16 +35,22 @@ for any library claim, read the synthesized template for any infrastructure clai
    permitted modules; `http/` imported from below; `operations/` touching HTTP types.
 4. **Structure.** The four rules in AGENTS.md: narrating comments, boundaries without a
    recorded reason, shortcuts, misplaced files. Name the file and line.
-5. **Tests.** Behaviors with no test; tests that would pass with the behavior deleted; tests
+5. **Code quality.** Beyond item 4, judged as a senior engineer would in a hiring review,
+   not only against the rules: names that say what a thing is; functions whose body matches their name;
+   duplication that a design-document seam already covers; dead or speculative code;
+   control flow that could be flatter; idioms inconsistent with the rest of the codebase;
+   anything a reader would have to re-read. A finding here needs a concrete rewrite, not
+   a preference.
+6. **Tests.** Behaviors with no test; tests that would pass with the behavior deleted; tests
    asserting on mocks; network access; sleeps; tautologies; expected values changed without
    a stated behavior change.
-6. **Types.** Escape hatches, duplicated shapes, non-exhaustive switches, default exports.
-7. **Security.** Every new input path, every outbound request, every string that reaches a
+7. **Types.** Escape hatches, duplicated shapes, non-exhaustive switches, default exports.
+8. **Security.** Every new input path, every outbound request, every string that reaches a
    response or the DOM.
-8. **Document sync.** Tree, contract, limits, README, decision log; and whether each document
+9. **Document sync.** Tree, contract, limits, README, decision log; and whether each document
    change is correctly classified as adding detail or relaxing a rule.
-9. **Commit proposal.** Does the subject describe the change? Is the boundary one logical
-   change? Would the commit pass preflight on its own?
+10. **Commit proposal.** Does the subject describe the change? Is the boundary one logical
+    change? Would the commit pass preflight on its own?
 
 ## What not to do
 
