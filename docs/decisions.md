@@ -237,6 +237,8 @@ tsconfig. The SDK is consumed through its built `dist/` (its `tsc --watch` runs 
 in dev); Vitest aliases the SDK to source. Fall back to `tsx` if this causes friction.
 **Rejected:** `tsx` as the default: fine, but one more dependency when the runtime does the job.
 **Consequences:** No enums, no parameter properties. Verified or reversed at scaffold time.
+Addendum 2026-10-03: verified. Node 24.18 runs the API sources directly and `tsc -b` emits
+them from the same files.
 
 ## 20. Test strategy: no network, fake upstream, Playwright for the whole stack
 
@@ -377,3 +379,62 @@ header for a known path and unsupported method. Both are problem details with `n
 and a wrong-method request would be indistinguishable from a wrong path.
 **Consequences:** The HTTP design document fixes how 405 is produced, since Hono does not
 distinguish the two cases by default.
+
+## 31. Runtime dependencies
+
+**Date:** 2026-10-03
+**Context:** AGENTS.md requires a log entry for every runtime dependency. The API's set is
+fixed here so later additions stand out.
+**Decision:** `hono`, `@hono/zod-openapi`, `@hono/node-server`, `@hono/aws-lambda`,
+`@hono/swagger-ui`, `zod`, `sharp`, `undici`, and `@aws-sdk/client-dynamodb`. The SDK has
+none. The UI depends only on the SDK.
+**Rejected:** Node's global `fetch` instead of the `undici` package: it follows redirects
+and decompresses automatically, which would bypass the per-hop policy and the byte cap; the
+package's `request` returns raw responses and exposes the connector `lookup` for address
+pinning. `pino` for logging: the logger is under eighty lines and every field is chosen, so
+a dependency buys nothing. `file-type` for sniffing: six signatures in a table. Scalar instead
+of `@hono/swagger-ui` for the docs page: either works; the Hono-org package keeps the
+dependency set in one family.
+**Consequences:** Nine runtime dependencies in the API, all pinned exactly.
+
+## 32. Fixed-window rate limiting that fails open
+
+**Date:** 2026-10-03
+**Context:** The limiter must be a single DynamoDB round trip to stay cheap, and DynamoDB can
+be unavailable.
+**Decision:** A fixed one-minute window with an atomic `ADD` counter per key and window. On
+a DynamoDB error or timeout the request is allowed and the failure is logged.
+**Rejected:** Sliding window or token bucket: more precise at the boundary, but needs a
+read before write or a conditional update, doubling cost for a limit whose job is bounding
+abuse, not metering. Failing closed: turns a DynamoDB incident into a full outage when
+reserved concurrency already caps the damage.
+**Consequences:** Up to twice the limit can pass across a window boundary. A DynamoDB outage
+degrades to the global concurrency cap only.
+
+## 33. The transform timeout is not provoked in tests
+
+**Date:** 2026-10-03
+**Context:** sharp's timeout has whole-second granularity and is checked from libvips
+progress callbacks, so a test that provokes it needs work that reliably exceeds a second on
+any machine, which is either slow or flaky.
+**Decision:** The error mapping is tested by constructing the error sharp produces; the real
+timeout path is not exercised in the suite.
+**Rejected:** A large AVIF encode as the trigger: deterministic enough but adds tens of
+seconds to every run. Marking the test retryable: the preflight skill forbids `retry`.
+**Consequences:** One documented gap, listed in the README's testing section together with
+the fetcher's connect timeout, which has no hermetic test because a loopback connect cannot
+be made to hang.
+
+## 34. TypeScript 5.9 for tooling
+
+**Date:** 2026-10-03
+**Context:** TypeScript 7 is the native compiler. It exposes no JavaScript compiler API, and
+typescript-eslint's supported range stops before it, so type-aware linting cannot run on it.
+**Decision:** Pin `typescript` to 5.9.x. Every tsconfig flag the architecture relies on
+exists there.
+**Rejected:** TypeScript 7 for speed: it would mean dropping type-aware lint rules, which
+decision 18 made load-bearing. TypeScript 6.0: inside the lint range but adds deprecation
+errors for no benefit here.
+**Consequences:** Relative imports use `.ts` specifiers with `rewriteRelativeImportExtensions`
+so the same source runs under Node's native type stripping and compiles with `tsc`.
+

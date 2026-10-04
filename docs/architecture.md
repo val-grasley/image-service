@@ -97,6 +97,8 @@ directory's statement.
 ├── CLAUDE.md                 One line: an import of AGENTS.md.
 ├── .claude/skills/           One directory per skill, each holding SKILL.md. Loaded on demand.
 ├── README.md
+├── package.json              Workspace root: scripts and dev dependencies. Beside it: lockfile, .npmrc, .node-version,
+│                             tsconfig.base.json and the root tsconfig.json of references, eslint.config.js, vitest.config.ts, Prettier config.
 ├── docs/
 │   ├── architecture.md       This document.
 │   ├── decisions.md          Decision log.
@@ -108,6 +110,7 @@ directory's statement.
 │   │   │   ├── lambda.ts         Lambda entry: streaming handler.
 │   │   │   ├── app.ts            Builds the Hono app from a Config and its collaborators.
 │   │   │   ├── config.ts         Parses environment into a typed Config. Sole reader of process.env.
+│   │   │   ├── errors.ts         ServiceError: the one error type domain modules throw, carrying an SDK code.
 │   │   │   ├── http/             HTTP surface only: routes, schemas, error mapping, middleware.
 │   │   │   │   ├── routes/       One file per endpoint.
 │   │   │   │   ├── middleware/   request-id, rate-limit, loop-guard.
@@ -124,7 +127,7 @@ directory's statement.
 │   │   │   ├── image/
 │   │   │   │   ├── spec.ts       TransformSpec: parsing, defaults, canonical form, cache key.
 │   │   │   │   └── pipeline.ts   Sole importer of sharp. TransformSpec + bytes → bytes + metadata.
-│   │   │   ├── cache/            ResultCache interface and memory implementation.
+│   │   │   ├── cache/            ByteLru (shared by both caches), ResultCache interface and memory implementation.
 │   │   │   ├── rate-limit/       RateLimiter interface, memory and DynamoDB implementations.
 │   │   │   └── observability/    logger.ts. The only writer to stdout.
 │   │   └── test/                 Integration tests against the app, and their helpers.
@@ -167,8 +170,10 @@ in AGENTS.md.
    typed against the SDK's parameter types so the two cannot drift. Validation failure → 400
    with field-level errors. The URL half of the policy (section 5, "URL rules") runs here so
    obviously bad URLs fail before any work.
-5. **Canonicalize.** The spec's canonical form (defaults applied, parameters sorted, values
-   normalized) is the in-process cache key and the form the SDK emits.
+5. **Canonicalize.** The spec's canonical form (defaults applied, parameters in a fixed
+   order, values normalized) is the in-process cache key. The SDK emits the same fixed
+   order without defaults, since `DEFAULT_QUALITY` is server configuration, so SDK-built
+   URLs are byte-identical for equal parameters even though they are not the cache key.
 6. **Result cache.** Look up by canonical key in the per-instance `ResultCache`.
 7. **Fetch.** Through `source/fetcher.ts` under the rules in section 5. Source bytes are cached
    briefly by URL.
@@ -348,7 +353,9 @@ both paths so a changed error code list is never stale at the edge; every 4xx an
 `no-store`.
 
 CORS: `Access-Control-Allow-Origin: *` on every response, since there are no credentials, and
-`Access-Control-Expose-Headers` listing the custom headers. Clients measure file size from the
+`Access-Control-Expose-Headers` set to exactly `ETag`, `X-Request-Id`, `X-Image-Width`,
+`X-Image-Height`, `X-Image-Format`, `X-Result-Cache`, `Retry-After`, `RateLimit`,
+`RateLimit-Policy`. `ETag` is listed because it is not CORS-safelisted. Clients measure file size from the
 received body, not from `Content-Length`, because streamed Lambda responses may be delivered
 chunked.
 
@@ -411,7 +418,7 @@ JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
 
 | Variable | Default | Reason |
 |---|---|---|
-| `MAX_SOURCE_BYTES` | 15 MB | Large photographs fit; bounds memory per request |
+| `MAX_SOURCE_BYTES` | 15 MB (15,000,000) | Large photographs fit; bounds memory per request |
 | `MAX_INPUT_PIXELS` | 50 MP | Decompression bomb guard; far below libvips's default |
 | `FETCH_CONNECT_TIMEOUT_MS` | 3000 | Unreachable hosts fail fast |
 | `FETCH_TOTAL_TIMEOUT_MS` | 8000 | Whole redirect chain and body |
@@ -419,12 +426,12 @@ JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
 | `TRANSFORM_TIMEOUT_SECONDS` | 5 | sharp's timeout takes whole seconds; bounds decode plus encode |
 | `MAX_OUTPUT_DIMENSION` | 4096 | Larger outputs are a CPU attack, not a thumbnail |
 | `MAX_OUTPUT_PIXELS` | 16 MP | Caps the product of both dimensions |
-| `MAX_OUTPUT_BYTES` | 10 MB | Keeps delivery inside the Lambda streaming budget; a 16 MP PNG can exceed 30 MB |
+| `MAX_OUTPUT_BYTES` | 10 MB (10,000,000) | Keeps delivery inside the Lambda streaming budget; a 16 MP PNG can exceed 30 MB |
 | `DEFAULT_QUALITY` | 80 | Conventional lossy default |
 | `RESULT_CACHE_TTL_SECONDS` | 3600 | Also the `Cache-Control` max-age |
-| `RESULT_CACHE_MAX_BYTES` | 100 MB | Per-instance LRU budget |
+| `RESULT_CACHE_MAX_BYTES` | 100 MB (100,000,000) | Per-instance LRU budget |
 | `SOURCE_CACHE_TTL_SECONDS` | 300 | Covers a user iterating on one image |
-| `SOURCE_CACHE_MAX_BYTES` | 50 MB | |
+| `SOURCE_CACHE_MAX_BYTES` | 50 MB (50,000,000) | |
 | `RATE_LIMIT_PER_MINUTE` | 60 | Per client IP, counting requests that reach the origin; edge cache hits are not counted. IPv6 clients keyed on their /64 |
 | `RATE_LIMIT_BACKEND` | `memory` | `memory` or `dynamodb` |
 | `RATE_LIMIT_TABLE` | none | Required when backend is `dynamodb` |
@@ -454,9 +461,9 @@ Lambda settings in CDK: 1536 MB memory, 20 s timeout, reserved concurrency 10.
 
 | Concern | Choice |
 |---|---|
-| Runtime | Node 24, ESM. API dev loop via native type stripping with `erasableSyntaxOnly`; fallback `tsx` |
+| Runtime | Node 24, ESM. API dev loop via native type stripping with `erasableSyntaxOnly`; relative imports carry `.ts` extensions, which `rewriteRelativeImportExtensions` rewrites on emit; fallback `tsx` |
 | Packages | npm workspaces, exact versions, lockfile committed |
-| Types | `tsc -b` with project references; strict plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `erasableSyntaxOnly` |
+| Types | TypeScript 5.9 (decision 34), `tsc -b` with project references; strict plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `erasableSyntaxOnly`, `rewriteRelativeImportExtensions` |
 | Lint | ESLint, typescript-eslint strict type-checked, seam rules from section 6 |
 | Format | Prettier |
 | Unit and integration tests | Vitest; integration tests call the app in-process against `fake-upstream` |
@@ -482,16 +489,18 @@ logger setup, the request-id middleware, the loop-guard middleware, the esbuild 
 
 | Document | Status |
 |---|---|
-| `architecture.md`, `decisions.md` | Drafted, under review |
-| `design/url-policy-and-fetching.md` | To write: test table, undici mechanics, sniffing |
-| `design/http-api.md` | To write: full OpenAPI shape, every code's `title` and `detail` |
-| `design/caching.md` | To write: LRU accounting, ETag computation order |
-| `design/rate-limiting.md` | To write: DynamoDB window algorithm, TTL, key shape |
-| `design/image-pipeline.md` | To write: crop mode to sharp `fit` mapping, encoder options |
-| `design/infrastructure.md` | To write: stack resources, forwarded-header list as load-bearing, `PUBLIC_HOSTS` and the custom-domain option, bundling recipe, invalidation tied to the function asset so an API-only deploy refreshes `/docs`, deploy steps |
-| `design/observability.md`, `design/sdk.md`, `design/ui.md` | To write; each a page or less. Observability covers log shape and request-ID propagation only |
+| `architecture.md`, `decisions.md` | Approved |
+| `design/url-policy-and-fetching.md` | Drafted, under review |
+| `design/fake-upstream.md` | Drafted, under review |
+| `design/http-api.md` | Drafted, under review |
+| `design/caching.md` | Drafted, under review |
+| `design/rate-limiting.md` | Drafted, under review |
+| `design/image-pipeline.md` | Drafted, under review |
+| `design/infrastructure.md` | Drafted, under review |
+| `design/observability.md`, `design/sdk.md`, `design/ui.md` | Drafted, under review |
 
-This document does not govern implementation until the design documents it cites exist.
+This document governs implementation once every design document above exists; each is
+approved in the commit that adds it.
 
 ## 12. Next steps beyond this scope
 
