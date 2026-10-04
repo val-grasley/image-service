@@ -198,13 +198,13 @@ rebase, no force push; a mistake is fixed by a following commit that says so.
 3. Design documents under `docs/design/`
 4. Subsystem skills, reconciled against the design documents
 5. Workspace scaffold: tooling, lint, typecheck, `config.ts`, `observability/logger.ts`,
-   the local entry, an empty test run
+   and their tests
 6. SDK: transform types, error codes, canonical URL builder
 7. API: fetch policy with its test table
 8. API: fetcher and sniffer, and the fake-upstream package
 9. API: image pipeline
 10. API: `operations/`, routes for `/process`, `/info`, and `/health`, validation,
-    problem-details errors, request-id and loop-guard middleware
+    problem-details errors, request-id and loop-guard middleware, the local entry
 11. API: caching headers, ETag, result and source caches
 12. API: rate limiter with memory and DynamoDB implementations, and its middleware
 13. API: OpenAPI document and docs route
