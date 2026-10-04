@@ -5,5 +5,8 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"],
-  "references": [{ "path": "../../packages/sdk/tsconfig.build.json" }]
+  "references": [
+    { "path": "../../packages/sdk/tsconfig.build.json" },
+    { "path": "../../packages/fake-upstream/tsconfig.build.json" }
+  ]
 }

@@ -30,7 +30,7 @@ has already happened in the route. `cacheKey` is pure and total.
 ## pipeline.ts
 
 ```ts
-type InspectResult = { format: SourceType; width: number; height: number; pages: number };
+type InspectResult = Pick<SourceInfo, 'format' | 'width' | 'height' | 'pages'>; // SDK's /info shape
 
 type TransformResult = {
   bytes: Uint8Array;
@@ -45,6 +45,7 @@ function pipelineVersion(): string; // `${sharp.versions.sharp}/${PIPELINE_REVIS
 
 function inspect(bytes: Uint8Array, type: SourceType): Promise<InspectResult>;
 function transform(bytes: Uint8Array, info: InspectResult, spec: TransformSpec, limits: PipelineLimits): Promise<TransformResult>;
+function fromSharpError(error: unknown): ServiceError; // exported so the mapping is testable in isolation
 ```
 
 `PipelineLimits` is the slice of `Config` with `maxInputPixels`, `transformTimeoutSeconds`,
@@ -54,7 +55,9 @@ and `maxOutputBytes`.
 the input with `limitInputPixels: false`, because the limit is enforced when the input is
 opened and would otherwise turn an oversized header into an opaque error before the
 dimensions are known. `format` is the sniffed `type` passed in, not sharp's decoder id
-(sharp reports AVIF as `heif`). The operation compares `width * height` with
+(sharp reports AVIF as `heif`). `width` and `height` are the dimensions after EXIF
+orientation (sharp's `metadata().autoOrient`), so `/info` reports what `/process` without a
+resize returns; the pixel count is the same either way. The operation compares `width * height` with
 `MAX_INPUT_PIXELS` and throws `source_too_large` before calling `transform`. `pages`
 defaults to 1 when sharp omits it. A header sharp cannot parse throws
 `unsupported_source_type`.
@@ -106,8 +109,11 @@ not set.
 
 ### Errors
 
-sharp's timeout surfaces as an `Error` whose message is `timeout: <n>% complete`;
-`transform` maps a message matching `/^timeout: \d+% complete$/` to `transform_timeout`. sharp's input-too-large error (`Input image exceeds pixel limit`)
+sharp's timeout surfaces as an `Error` whose message starts with the line
+`timeout: <n>% complete`, usually followed by libvips's own lines (observed with sharp
+0.35.5: `timeout: 43% complete\nVipsImage: killed for image "temp-97"`; decision 41);
+`fromSharpError` maps a message matching `/^timeout: \d+% complete(?:\n|$)/` to
+`transform_timeout`. sharp's input-too-large error (`Input image exceeds pixel limit`)
 maps to `source_too_large`. Anything else propagates as `internal_error` with the original
 as `cause`.
 

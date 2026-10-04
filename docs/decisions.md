@@ -549,3 +549,36 @@ relaxation, with its own entry) and adding a checked-in test certificate plus a 
 item 18) lists it among the testing gaps. A checked-in certificate would mean committing a
 private key, which AGENTS.md forbids; if TLS coverage is chosen, the certificate is generated
 at test time.
+
+## 41. The transform-timeout match covers the first line of sharp's message
+
+**Date:** 2026-10-04
+**Context:** The pipeline design matched sharp's timeout with `/^timeout: \d+% complete$/`,
+taking the message to be that one line. Provoked against sharp 0.35.5 (a 1-second timeout on
+a large blur), the message is `timeout: <n>% complete` followed by libvips's own lines, for
+example `\nVipsImage: killed for image "temp-97"` and sometimes a line from the encoder. The
+anchored pattern would map every real timeout to `internal_error`. Decision 33 tests the
+mapping by constructing the error, which needs the mapping callable on its own.
+**Decision:** Match `/^timeout: \d+% complete(?:\n|$)/`: the first line exactly, whatever
+follows. The mapping is `fromSharpError` in `image/pipeline.ts`, exported for its table test,
+which includes the observed multi-line form.
+**Rejected:** Matching `timeout` anywhere in the message: a decoder or encoder message that
+mentions a timeout would be reported as the transform budget. The `m` flag: it would match
+the text on any line, not only the first.
+**Consequences:** A real timeout reaches the caller as `transform_timeout`. The same probes
+found that sharp's timeout does not interrupt AVIF encoding or mozjpeg's JPEG encoding: a
+16 MP noise image took about 19 s as AVIF at effort 2 under a 5 s timeout, and 6183 ms as
+mozjpeg JPEG under a 1 s timeout (plain libjpeg finishes in about 350 ms), while WebP was
+interrupted at 1011 ms. That is recorded here as an observation for the author, not
+addressed by this entry; the encoder options are unchanged.
+
+## 42. `inspect` reports dimensions after EXIF orientation
+
+**Date:** 2026-10-04
+**Context:** The pipeline design had `inspect` read width and height from the header without
+saying whether EXIF orientation applies. sharp's `metadata()` gives both the stored
+dimensions and, under `autoOrient`, the oriented ones, from the header alone.
+**Decision:** `inspect` returns the oriented dimensions.
+**Rejected:** The stored dimensions: `/info` would report 400 by 200 for an image that
+browsers and `/process` show as 200 by 400.
+**Consequences:** The pixel bound is unaffected, since the product is the same.
