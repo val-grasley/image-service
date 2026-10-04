@@ -40,7 +40,8 @@ export class ImageApiError extends Error {
   readonly problem: ProblemDetails;
   get code(): ErrorCode; get status(): number; get requestId(): string;
 }
-export class ImageApiTransportError extends Error {}   // fetch failed, no response
+export class ImageApiTransportError extends Error {}   // no complete response: network
+failure, abort, or truncated body
 
 // client.ts
 export type ProcessResult = {
@@ -48,7 +49,8 @@ export type ProcessResult = {
   width: number; height: number; etag: string; requestId: string; resultCache: 'hit' | 'miss';
 };
 export type SourceType = 'jpeg' | 'png' | 'webp' | 'gif' | 'avif' | 'tiff';
-export type SourceInfo = { url: string; finalUrl: string; format: SourceType; width: number; height: number; bytes: number; pages: number };
+export type SourceInfo = { url: string; finalUrl: string; format: SourceType; width: number;
+height: number; bytes: number; pages: number };
 export class ImageClient {
   constructor(baseUrl: string | URL, options?: { fetch?: typeof fetch });
   process(params: ProcessParams, options?: { signal?: AbortSignal }): Promise<ProcessResult>;
@@ -56,14 +58,17 @@ export class ImageClient {
 }
 ```
 
-`index.ts` re-exports exactly these. Every exported symbol carries a doc comment; this is
-the one place in the repository where that is required.
+`index.ts` re-exports exactly these. `errors.ts` also exports `ERROR_CODES`, the list
+`ErrorCode` is derived from, for the client's check of problem bodies; it is not re-exported.
+Every exported symbol carries a doc comment; this is the one place in the repository where
+that is required.
 
 ## Canonical URLs
 
 `processUrl` emits query parameters in the fixed order `url, width, height, crop, format,
 quality`, omits undefined ones, and does not add defaults. The endpoint path replaces any
-path on `baseUrl`, so `https://host/api/` and `https://host/` both yield `/process`. Two calls with the same
+path on `baseUrl`, so `https://host/api/` and `https://host/` both yield `/process`. Two
+calls with the same
 parameters produce byte-identical URLs regardless of the object's key order, which is what
 gives SDK users shared CloudFront cache entries (decision 11). It performs no range
 validation; the API does, and the error comes back typed.
@@ -75,15 +80,27 @@ absent, with the URL single-quoted and any single quote escaped.
 
 - `process`: `fetch(url, { signal })`. A non-2xx response with `application/problem+json`
   throws `ImageApiError`. A non-2xx response with any other body (a Lambda throttle, a
-  proxy error) throws `ImageApiError` with a synthesized problem: code `internal_error`,
-  the status, `detail` from the body text truncated to 200 characters, `requestId` from the
-  header or empty. A network failure throws `ImageApiTransportError` with `cause`.
+  proxy error) throws `ImageApiError` with a synthesized problem: `type`
+`/docs#error-internal_error`, `title` `Internal error`, code `internal_error`, the status,
+`detail` from the body text truncated to 200 characters, `requestId` from the header or
+empty. A problem-details body that is not JSON, or does not match `ProblemDetails`
+(including a code outside `ERROR_CODES`), is treated as any other body; a JSON parse failure
+is the `cause`. A network failure, an abort through `signal`, or a body cut off mid-read
+throws `ImageApiTransportError` with `cause`.
 - Metadata comes from the `X-Image-*` headers; `bytes` from `arrayBuffer()`; `resultCache`
-  from `X-Result-Cache`.
-- `info`: same error handling; the JSON body is returned as `SourceInfo` without
-  re-validation (the API is the trusted party).
+  from `X-Result-Cache`; `etag` from `ETag`; `requestId` from `X-Request-Id`. A 2xx response
+  missing one of these headers or `Content-Type`, or carrying a value outside the field's
+  type (a dimension that is not a positive integer, an unknown format or cache state), throws
+  `ImageApiError` with code `internal_error`, the response's own status, and a `detail`
+  naming the header (decision 47).
+- `info`: same error handling. The JSON body is checked against `SourceInfo` (each field's
+  type, and `format` against the source types) and returned as received; a 2xx body that is
+  not JSON or not a `SourceInfo` throws `internal_error` as above. Values are not
+  re-validated: the API is the trusted party for ranges, and the check exists because the
+  repository forbids casting `fetch`'s untyped JSON (decision 47).
 - The injectable `fetch` exists for tests and for Node users with a custom agent; it
-  defaults to `globalThis.fetch`.
+  defaults to `globalThis.fetch`. It is called without a receiver, since a browser's `fetch`
+  throws when called as a method of another object.
 
 ## Build
 
@@ -97,4 +114,8 @@ bundler.
 URL string; omission of undefined; `curlFor` quoting. `client.test.ts`: an injected `fetch`
 returning crafted responses for each branch above (problem JSON, non-problem 429 text,
 network rejection, success with headers), asserting the thrown class, `code`, `status`, and
-the parsed result.
+the parsed result. Also: the canonical URL and the `signal` reach `fetch`; a problem-details
+body that is malformed or carries an unknown code is synthesized; a body cut off mid-read is a
+transport error; each missing or invalid image header on a 2xx, and a non-JSON or mismatched
+`/info` body, is `internal_error` with the response's status; the default is
+`globalThis.fetch`, called without a receiver.

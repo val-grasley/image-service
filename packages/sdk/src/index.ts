@@ -14,4 +14,4 @@ export {
   type ErrorCode,
   type ProblemDetails,
 } from './errors.ts';
-export type { SourceInfo, SourceType } from './client.ts';
+export { ImageClient, type ProcessResult, type SourceInfo, type SourceType } from './client.ts';

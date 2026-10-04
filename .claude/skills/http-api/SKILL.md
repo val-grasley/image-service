@@ -30,7 +30,7 @@ schemas are locked to them, so a change touches both or neither.
 
 ## Adding an error code
 
-1. Add the code to the union in `packages/sdk/src/errors.ts`.
+1. Add the code to `ERROR_CODES` in `packages/sdk/src/errors.ts`; `ErrorCode` derives from it.
 2. Add its row to the status table in `http/errors.ts`. A new status needs a decision-log
    entry and a row in section 7.
 3. Register it in the OpenAPI responses of every route that can produce it, and in the

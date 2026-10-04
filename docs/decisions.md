@@ -659,3 +659,36 @@ description alone: only prose would say which codes a status admits. Listing onl
 the codes: the document would omit a code the route produces.
 **Consequences:** `not_found` and `method_not_allowed` have components that no operation
 references, since no GET operation produces them; `/docs` lists every code regardless.
+
+## 47. The client checks the types of what it returns and reports a malformed 2xx as `internal_error`
+
+**Date:** 2026-10-04
+**Context:** `design/sdk.md` took `ProcessResult` from the image headers without saying what
+happens when one is missing, and returned the `/info` body as `SourceInfo` "without
+re-validation". Read literally, a 2xx without `X-Image-Width` yields `width: 0` or `NaN`, and a
+2xx HTML page (a wrong base URL, an intermediary) escapes as a bare `SyntaxError`. Separately,
+`Response.json()` and `JSON.parse` are typed `any`, AGENTS.md forbids casts, and
+typescript-eslint's `no-unsafe-assignment` and `no-unsafe-return` reject handing `any` to a
+typed value (verified by linting a probe in `packages/sdk`). There is no cast-free way to type
+either JSON body without a runtime check.
+**Decision:** The client checks every value it returns or throws against its declared type.
+On `/process`, `Content-Type`, `ETag`, and `X-Request-Id` must be non-empty, the dimensions
+positive integers, `X-Image-Format` an output format, and `X-Result-Cache` `hit` or `miss`.
+The `/info` body must have every `SourceInfo` field with its type and a known source type. A
+problem-details body must have every `ProblemDetails` field with its type and a code from
+`ERROR_CODES`, a runtime list in `errors.ts` from which `ErrorCode` is now derived, as
+`CropMode` is from `CROP_MODES`. A 2xx that fails is `ImageApiError` with code
+`internal_error`, the response's own status, a detail naming the header or body, the request
+ID header or empty, and the JSON parse failure as `cause` where there was one. A
+problem-details body that fails is treated as a non-problem body.
+**Rejected:** A cast at the two JSON sites, which AGENTS.md forbids. A type guard that checks
+only that the body is an object, which is a cast in another form. `ImageApiTransportError`
+for a malformed 2xx: a response did arrive, and its request ID is worth reporting. Status 502
+for the synthesized problem: it would invent a status the response did not have, where the
+non-2xx synthesis already reports the actual one.
+**Consequences:** Types are checked, values are not: the API stays the trusted party for
+ranges, as the design intended. `ImageApiError.status` can be a 2xx status for these errors.
+An API that adds an error code, source type, or output format must ship with an SDK that
+knows it; an older SDK reports the new code as `internal_error` with the body text and
+rejects a `/info` body with the new source type. In this repository the UI bundles the SDK
+from the same commit, so they ship together.
