@@ -62,4 +62,17 @@ describe('parseConfig', () => {
     const config = parseConfig({ ALLOWED_HOSTS: ' 127.0.0.1:4000, Example.COM ,, ' });
     expect([...config.allowedHosts]).toEqual(['127.0.0.1:4000', 'example.com']);
   });
+
+  it('removes one trailing dot from the host part of each host-list entry', () => {
+    const config = parseConfig({
+      ALLOWED_HOSTS: 'Fake.Example.:8080, internal.example., [fd00::1]:4000',
+      PUBLIC_HOSTS: 'Self.Example., cdn.example',
+    });
+    expect([...config.allowedHosts]).toEqual([
+      'fake.example:8080',
+      'internal.example',
+      '[fd00::1]:4000',
+    ]);
+    expect([...config.publicHosts]).toEqual(['self.example', 'cdn.example']);
+  });
 });

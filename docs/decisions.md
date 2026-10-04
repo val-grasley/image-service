@@ -493,3 +493,59 @@ header tests.
 **Consequences:** The derivation's tests are a table over `clientKey`; the middleware's tests
 cover only wiring and the response. Without the IPv4-mapped rule, a server listening on a
 dual-stack socket would put every IPv4 client in the one bucket `0:0:0:0::/64`.
+
+## 38. Address checks read every NAT64 layout and deny what they cannot read
+
+**Date:** 2026-10-04
+**Context:** Review of the fetch policy found three fail-open or crash paths in the address
+rules. `64:ff9b:1::/48` was read only at its last 32 bits, but it is a local-use NAT64
+prefix (RFC 8215) whose operator may use any RFC 6052 layout of /48 or longer, and the /48
+layout carries the IPv4 address in bits 48 to 87. A resolution that was not an IP address
+matched no range and passed. An embedding-prefix address carrying a zone index made the
+embedded-address parse throw.
+**Decision:** Read `64:ff9b:1::/48` addresses at the /96, /64, /56, and /48 layouts and deny
+if any reading is in a blocked range. Deny a resolution that is not an IP address. Drop the
+zone index before reading an embedded address.
+**Rejected:** The last 32 bits only: misses the /48 layout and the others. Letting a non-IP
+string through: it fails open, since nothing checked it.
+**Consequences:** An address that is public in one layout but zero-filled in another reads
+as `0.0.0.0/8` there and is denied, which blocks most of `64:ff9b:1::/48` in practice. The
+policy table has a row per layout.
+
+## 39. The fetcher takes its logger per call and its service version through `FetcherDeps`
+
+**Date:** 2026-10-04
+**Context:** The design document's `FetcherDeps` held the resolver, the policy, and the
+limits, but its "Logging" section requires the fetcher to log denials and fetches, and
+section 5 of the architecture requires a `User-Agent` carrying the service version, which
+no module under `source/` can know. Its prose also said `resolve` has a default while the
+type made it required. The logger is per request: `design/caching.md` passes it to
+`processImage` as a separate argument so dependencies are built once.
+**Decision:** `fetchSource(url, deps, log)` and `BoundFetch = (url, log) => …`, the logger
+following the same convention as `processImage`. `serviceVersion: string` is added to
+`FetcherDeps`, and `resolve` becomes optional with the `dns.promises.lookup` default the
+prose describes. These add detail to an existing seam rather than create a new one.
+`BoundFetch` is declared beside its first importer, since `fetcher.ts` does not use it.
+**Rejected:** `log` as a `FetcherDeps` field: `BoundFetch` is bound once in `app.ts`, so the
+fetcher's lines would carry the application logger and lose the request's `requestId`.
+Importing the API's `package.json` into the fetcher for the version: the build project's
+`rootDir` is `src`, so the import fails to compile, and the version would then be read in a
+second place when `/health` needs it. A hardcoded version string: drifts from the manifest.
+**Consequences:** `app.ts` passes the version when it binds `fetchSource`, and operations
+pass their request logger on every call.
+
+## 40. Fetcher-level downgrade test deferred to the author
+
+**Date:** 2026-10-04
+**Context:** The https-to-http downgrade rule is tested in the policy table. Testing it
+through the fetcher needs an https first hop, which the fake upstream cannot serve because
+Node 24 generates no certificates.
+**Decision:** The design's fetcher test bullet stays as a requirement, marked deferred; no
+relaxation is taken. The author chooses between recording policy-table-only coverage (a
+relaxation, with its own entry) and adding a checked-in test certificate plus a CA option to
+`FetcherDeps`.
+**Rejected:** Silently dropping the bullet. A spy on `checkUrl`: that is mocking.
+**Consequences:** One required test is absent until the author rules. The README (sequence
+item 18) lists it among the testing gaps. A checked-in certificate would mean committing a
+private key, which AGENTS.md forbids; if TLS coverage is chosen, the certificate is generated
+at test time.

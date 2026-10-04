@@ -12,7 +12,14 @@ const hostList = z
       new Set(
         raw
           .split(',')
-          .map((entry) => entry.trim().toLowerCase())
+          // Hostnames compare without one trailing dot (architecture section 5), so it is
+          // removed from the host part here, before any :port.
+          .map((entry) =>
+            entry
+              .trim()
+              .toLowerCase()
+              .replace(/\.(:\d+)?$/, '$1'),
+          )
           .filter((entry) => entry.length > 0),
       ),
   );

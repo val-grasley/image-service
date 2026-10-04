@@ -42,16 +42,23 @@ name, `PUBLIC_HOSTS`, IP literal, downgrade. The first failing rule is the repor
 semantics in section 5.
 
 `checkAddresses` applies the address rules to every address; one blocked address denies
-with that address in `detail`. `ALLOWED_HOSTS` exempts the host from this check.
+with that address in `detail`, and so does a string that is not an IP address, since the
+fetcher could not connect to it as checked. `ALLOWED_HOSTS` exempts the host from this check.
 
 **Range checks** use `node:net` `BlockList`, built once per process from the two tables in
-section 5. The IPv4 list is added with `addSubnet(..., 'ipv4')` and the IPv6 list with
-`addSubnet(..., 'ipv6')`. `check` is called with the address family as its second argument
-(`'ipv6'` for any IPv6 literal); with the family omitted an IPv6 input is never matched.
-`BlockList` matches IPv4-mapped addresses (`::ffff:a.b.c.d`) against IPv4 rules when
-checked as `'ipv6'`; for the other three embedding prefixes (IPv4-compatible, NAT64, 6to4),
-`embeddedIpv4(address)` extracts the embedded address and it is checked against the IPv4
-list in addition to the IPv6 check. The `detail` names the matched range.
+section 5, one `BlockList` per range so that `detail` can name the range that matched. IPv4
+ranges are added with `addSubnet(..., 'ipv4')` and IPv6 ranges with `addSubnet(..., 'ipv6')`.
+`check` is called with the address family as its second argument (`'ipv6'` for any IPv6
+literal); with the family omitted an IPv6 input is never matched. `BlockList` matches
+IPv4-mapped addresses (`::ffff:a.b.c.d`) against IPv4 rules when checked as `'ipv6'`, and
+matches addresses carrying a zone index (`fe80::1%eth0`). For the other three embedding
+prefixes (IPv4-compatible, NAT64, 6to4), `embeddedIpv4(address)` extracts the embedded
+address and it is checked against the IPv4 ranges in addition to the IPv6 check; the zone
+index is dropped before extraction. `64:ff9b:1::/48` is a local-use NAT64 prefix (RFC 8215)
+whose operator may use any RFC 6052 layout of /48 or longer, so the address is read at each
+of the /96, /64, /56, and /48 positions and one blocked reading denies. A consequence is that
+an address public in one layout but zero-filled in another is denied, which in practice
+blocks most of that prefix (decision 38).
 
 **Host normalization.** Node's `URL` lowercases hostnames and canonicalizes IPv4 shorthand,
 octal, hex, and decimal forms to dotted quads, and brackets IPv6 literals. The policy works on
@@ -68,18 +75,25 @@ type FetchedSource = {
 };
 
 type FetcherDeps = {
-  resolve: (hostname: string) => Promise<string[]>;
+  resolve?: (hostname: string) => Promise<string[]>;
   policy: PolicyConfig;
   limits: FetchLimits;
+  serviceVersion: string;
 };
 
-function fetchSource(url: URL, deps: FetcherDeps): Promise<FetchedSource>;
-type BoundFetch = (url: URL) => Promise<FetchedSource>;   // what app.ts hands to operations
+function fetchSource(url: URL, deps: FetcherDeps, log: Logger): Promise<FetchedSource>;
+// What app.ts hands to operations; declared beside its first importer, not in fetcher.ts.
+type BoundFetch = (url: URL, log: Logger) => Promise<FetchedSource>;
 ```
 
 `FetchLimits` is the slice of `Config` with the connect and total timeouts, the redirect
 cap, and the byte cap. `resolve` defaults to `dns.promises.lookup(hostname, { all: true })`
 mapped to address strings; tests inject a resolver that returns addresses in chosen ranges.
+`log` is the per-request logger and receives the lines in "Logging" below; it is an argument
+rather than a dependency so `deps` are bound once while each request's lines carry its
+`requestId`, as `processImage` takes its logger (`design/caching.md`). `serviceVersion` is
+the version in the `User-Agent` header (`image-service/<version>`); the composition root
+supplies it because nothing under `source/` knows the package version (decision 39).
 
 **Per hop:**
 
@@ -95,8 +109,12 @@ mapped to address strings; tests inject a resolver that returns addresses in cho
    validation is against the name. `connectTimeout` is the connect budget. The request
    carries `maxRedirections: 0` (undici 8 rejects any other value on `request`; redirects
    are the fetcher's job), the headers in section 5, and one `AbortSignal.timeout(total)`
-   created before hop 1 and shared by every hop. The `Agent` is built per hop, because its
-   lookup is bound to one hostname, and closed in a `finally` so no socket outlives the
+   created before hop 1 and shared by every hop. The deadline also bounds steps 2 and 4
+   where the request's signal does not reach: resolution is raced against the signal
+   (`dns.lookup` cannot be cancelled), and the signal destroys the hop's `Agent`, because
+   undici does not abort a connection attempt in progress when the request's signal fires.
+   The `Agent` is built per hop, because its lookup is bound to one hostname, and destroyed
+   in a `finally` (not closed, which would wait on an unread body) so no socket outlives the
    hop.
 5. If the status is 301, 302, 303, 307, or 308: read `Location`, resolve it against the
    current URL, discard the body, count the hop, and repeat from step 1 with `previous` set.
@@ -114,8 +132,9 @@ Timeouts: the connect timeout surfaces as `upstream_error`; the total deadline s
 `upstream_timeout`. Connection refused, DNS failure, and TLS failure are `upstream_error`.
 undici clears its connect timer the moment TCP connects, so a server that accepts and then
 stays silent is caught by the total deadline, not the connect timeout. The connect timeout
-therefore has no hermetic test: a loopback connect cannot be made to hang. This gap is
-recorded beside decision 33.
+therefore has no hermetic test: a loopback connect cannot be made to hang. For the same
+reason the deadline destroying a hop's `Agent` during a connection attempt has no hermetic
+test either. These gaps are recorded beside decision 33.
 
 **Why undici `request` and not `fetch`.** `fetch` follows redirects and decompresses
 automatically, both of which would bypass the per-hop policy and the byte cap. `request`
@@ -175,10 +194,13 @@ expectation. Required rows, grouped:
 - **IPv6 literals:** `[::1]`, `[::]`, `[::ffff:127.0.0.1]`, `[::ffff:7f00:1]`,
   `[::127.0.0.1]`, `[64:ff9b::7f00:1]`, `[64:ff9b:1::7f00:1]`, `[2002:7f00:1::]`,
   `[fc00::1]`, `[fe80::1]`, `[fec0::1]`, `[ff02::1]`; and `[2606:4700::1111]` passes.
+  For `64:ff9b:1::/48`, one address private in exactly one of the /96, /64, /56, and /48
+  layouts per layout, and one public in all four, which passes.
 - **Addresses:** a public name resolving to one address in each blocked range; one public
-  plus one private address denies; `ALLOWED_HOSTS` with port reaching `127.0.0.1:<port>`
-  and denied at `127.0.0.1:<other>`; without a port, allowed on 443 and denied on a high
-  port.
+  plus one private address denies; a zone-indexed address in an embedding prefix is judged by
+  its embedded address; a resolution that is not an IP address denies; `ALLOWED_HOSTS` with
+  port reaching `127.0.0.1:<port>` and denied at `127.0.0.1:<other>`; without a port,
+  allowed on 443 and denied on a high port.
 - **Downgrade:** `https` previous hop to `http` current denied; `http` to `https` allowed.
 
 Fetcher integration tests (`apps/api/test/fetcher.test.ts`) run against the fake upstream
@@ -187,7 +209,7 @@ Fetcher integration tests (`apps/api/test/fetcher.test.ts`) run against the fake
 - Each redirect status followed; relative `Location` resolved; chain of `MAX_REDIRECTS`
   succeeds and `MAX_REDIRECTS + 1` is `too_many_redirects`; a hop to a private address is
   `url_not_allowed`; a hop to a `PUBLIC_HOSTS` name is `url_not_allowed`; https to http is
-  `url_not_allowed`.
+  `url_not_allowed` (Deferred; see decision 40).
 - `Content-Length` over the cap is `source_too_large` with zero body bytes read: the test
   requests `/huge?bytes=&ms=` with `ms` longer than `FETCH_TOTAL_TIMEOUT_MS`, so the fake
   sends the headers and holds the body, and asserts the error code and that the fake's
@@ -199,8 +221,11 @@ Fetcher integration tests (`apps/api/test/fetcher.test.ts`) run against the fake
   `upstream_error`; a slow body past the total deadline is `upstream_timeout`; a server
   that accepts and sends no headers past the total deadline (`/slow-headers`) is
   `upstream_timeout`.
-- A hostname whose injected resolution is private produces no TCP connection (the fake's
-  connection log is empty).
+- A hostname whose injected resolution is private produces no TCP connection: no
+  `net.client.socket` diagnostics-channel event is published during the fetch. The fake's
+  connection log cannot show this, because the fake listens on an ephemeral port and a name
+  that reaches the address rules is fetched on port 80 or 443. The same oracle shows that an
+  empty resolution and a resolution outlasting the total budget connect nowhere.
 - The loop-marker header is present on every hop (the fake echoes request headers).
 - Upstream `ETag` and `Last-Modified` are returned; `Set-Cookie` and `X-Powered-By` from
   the fake are not present on the result.

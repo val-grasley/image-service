@@ -34,4 +34,7 @@ silently for someone; none can be inferred from the undici or Node documentation
 
 The design document's test table is the minimum. Address-rule tests inject the resolver;
 redirect, byte, encoding, and timeout tests run against `packages/fake-upstream`. A test
-that a private resolution produces no TCP connection reads the fake's connection records.
+that a private resolution produces no TCP connection asserts that no `net.client.socket`
+diagnostics-channel event is published during the fetch; the fake's connection records
+cannot show it, because a name that reaches the address rules is fetched on port 80 or 443,
+not the fake's ephemeral port.
