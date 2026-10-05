@@ -385,11 +385,12 @@ CORS: `Access-Control-Allow-Origin: *` on every response, since there are no cre
 `X-Image-Height`, `X-Image-Format`, `X-Result-Cache`, `Retry-After`, `RateLimit`,
 `RateLimit-Policy`. `ETag` is listed because it is not CORS-safelisted. Simple `GET`s need
 no preflight; a request sending `If-None-Match` or `X-Request-Id` is preflighted, and the
-preflight is answered 204 with `Access-Control-Allow-Methods: GET,HEAD` and
-`Access-Control-Allow-Headers: If-None-Match,X-Request-Id`. CloudFront allows `OPTIONS` on
-the API behavior for that purpose and does not cache it (decision 70). Clients measure file
-size from the received body, not from `Content-Length`, because streamed Lambda responses
-may be delivered chunked.
+preflight is answered 204 with `Access-Control-Allow-Methods: GET,HEAD`,
+`Access-Control-Allow-Headers: If-None-Match,X-Request-Id`, and `Access-Control-Max-Age`
+set to `CORS_MAX_AGE_SECONDS`, so a browser reuses it (decision 71). CloudFront allows
+`OPTIONS` on the API behavior for that purpose and does not cache it (decision 70). Clients
+measure file size from the received body, not from `Content-Length`, because streamed Lambda
+responses may be delivered chunked.
 
 ### ETag and conditional requests
 
@@ -473,6 +474,7 @@ JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
 | `RESULT_CACHE_MAX_BYTES` | 100 MB (100,000,000) | Per-instance LRU budget |
 | `SOURCE_CACHE_TTL_SECONDS` | 300 | Covers a user iterating on one image |
 | `SOURCE_CACHE_MAX_BYTES` | 50 MB (50,000,000) | |
+| `CORS_MAX_AGE_SECONDS` | 600 | `Access-Control-Max-Age` on a preflight. Without it Chromium keeps a preflight 5 s, so nearly every cross-origin conditional request costs two invocations of the reserved concurrency (decision 71) |
 | `RATE_LIMIT_PER_MINUTE` | 60 | Per client IP, counting requests that reach the origin; edge cache hits are not counted. IPv6 clients keyed on their /64 |
 | `RATE_LIMIT_BACKEND` | `memory` | `memory` or `dynamodb` |
 | `RATE_LIMIT_TABLE` | none | Required when backend is `dynamodb` |

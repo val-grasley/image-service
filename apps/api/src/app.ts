@@ -70,6 +70,7 @@ export function createApp(
       // Listed rather than mirrored: CloudFront does not forward Access-Control-Request-Headers.
       allowHeaders: ['If-None-Match', 'X-Request-Id'],
       exposeHeaders: EXPOSED_HEADERS,
+      maxAge: config.corsMaxAgeSeconds,
     }),
   );
   app.use(loopGuard);

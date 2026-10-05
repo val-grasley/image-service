@@ -19,6 +19,7 @@ describe('parseConfig', () => {
       resultCacheMaxBytes: 100_000_000,
       sourceCacheTtlSeconds: 300,
       sourceCacheMaxBytes: 50_000_000,
+      corsMaxAgeSeconds: 600,
       rateLimitPerMinute: 60,
       rateLimitBackend: 'memory',
       rateLimitTable: undefined,

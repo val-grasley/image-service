@@ -108,6 +108,7 @@ describe('CORS', () => {
       origin: response.headers.get('access-control-allow-origin'),
       methods: response.headers.get('access-control-allow-methods'),
       headers: response.headers.get('access-control-allow-headers'),
+      maxAge: response.headers.get('access-control-max-age'),
     };
   }
   const PREFLIGHT_ANSWER = {
@@ -115,6 +116,7 @@ describe('CORS', () => {
     origin: '*',
     methods: 'GET,HEAD',
     headers: 'If-None-Match,X-Request-Id',
+    maxAge: '600',
   };
 
   it('allows any origin and exposes exactly the documented headers on 200, 304, and errors', async () => {

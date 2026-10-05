@@ -235,6 +235,7 @@ defaults are architecture section 8's, and the two change together.
 | `RESULT_CACHE_MAX_BYTES` | 100,000,000 bytes | Per-instance LRU budget |
 | `SOURCE_CACHE_TTL_SECONDS` | 300 | Covers a user iterating on one image |
 | `SOURCE_CACHE_MAX_BYTES` | 50,000,000 bytes | Per-instance budget for fetched sources |
+| `CORS_MAX_AGE_SECONDS` | 600 | How long a browser may reuse a CORS preflight answer, so a cross-origin client does not spend a function invocation on a preflight before most requests |
 | `RATE_LIMIT_PER_MINUTE` | 60 | Per client IP, counting requests that reach the origin; IPv6 keyed on the /64 |
 | `RATE_LIMIT_BACKEND` | `memory` | `memory` or `dynamodb` |
 | `RATE_LIMIT_TABLE` | none | Required when the backend is `dynamodb` |
