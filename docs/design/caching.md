@@ -63,8 +63,9 @@ key. `q` is `-` for `format=png`: the spec carries no quality for lossless outpu
 requests differing only in `quality` share one key and one ETag (decision 58). It stays a
 number for `format=source`, because the key is formed before the source is fetched, when
 the output format is not yet known, so a source that resolves to png still keys on quality.
-CloudFront's cache key is the raw query string and still varies with `quality`; each such
-edge entry is filled from the one in-process entry. The leading `v1` is bumped if the key format changes. `url` is the href as received,
+CloudFront's cache key is the raw query string, so the edge still keeps one entry per
+`quality` value; each such edge entry is filled by whichever instance serves it and carries
+the same ETag. The leading `v1` is bumped if the key format changes. `url` is the href as received,
 not the redirect target, so two source URLs that redirect to the same place are two entries;
 this is correct because their upstream validators may differ.
 

@@ -29,8 +29,8 @@ const BLOCKED_IPV4: readonly (readonly [network: string, prefix: number])[] = [
   ['240.0.0.0', 4],
 ];
 
-// The IPv4-compatible, IPv4-translated, NAT64, and 6to4 prefixes are absent: they are blocked
-// only when the address they embed is, which embeddedIpv4 decides. IPv4-mapped addresses need
+// The IPv4-compatible, IPv4-translated, well-known NAT64, and 6to4 prefixes are absent: they
+// are blocked only when the address they embed is, which embeddedIpv4 decides. IPv4-mapped addresses need
 // no entry because BlockList matches them against the IPv4 rules.
 const BLOCKED_IPV6: readonly (readonly [network: string, prefix: number])[] = [
   ['::', 128],
@@ -38,8 +38,8 @@ const BLOCKED_IPV6: readonly (readonly [network: string, prefix: number])[] = [
   // Local-use NAT64 (RFC 8215): its operator may pick any RFC 6052 layout, so no single
   // reading of the embedded address can be trusted (decision 59).
   ['64:ff9b:1::', 48],
-  // Teredo (RFC 4380) carries a relay's IPv4 address and an obfuscated client one; it is
-  // blocked whole rather than decoded (decision 59).
+  // Teredo (RFC 4380) carries a Teredo server's IPv4 address and an obfuscated client one; it
+  // is blocked whole rather than decoded (decision 59).
   ['2001::', 32],
   ['fc00::', 7],
   ['fe80::', 10],
@@ -53,14 +53,14 @@ const BLOCKED_RANGES = [
   ...BLOCKED_IPV6.map(([network, prefix]) => blockedRange(network, prefix, 'ipv6')),
 ];
 
-// Prefixes whose addresses carry an IPv4 address in 32 bits starting at `start`, counted from
-// the most significant bit, which is checked against the IPv4 table: IPv4-compatible,
-// IPv4-translated (SIIT), the well-known NAT64 prefix, and 6to4.
-const IPV4_EMBEDDINGS: readonly { prefix: string; length: bigint; start: bigint }[] = [
-  { prefix: '::', length: 96n, start: 96n },
-  { prefix: '::ffff:0:0:0', length: 96n, start: 96n },
-  { prefix: '64:ff9b::', length: 96n, start: 96n },
-  { prefix: '2002::', length: 16n, start: 16n },
+// Prefixes whose addresses carry an IPv4 address in the 32 bits that follow the prefix, which
+// is checked against the IPv4 table: IPv4-compatible, IPv4-translated (SIIT), the well-known
+// NAT64 prefix, and 6to4.
+const IPV4_EMBEDDINGS: readonly { prefix: string; length: bigint }[] = [
+  { prefix: '::', length: 96n },
+  { prefix: '::ffff:0:0:0', length: 96n },
+  { prefix: '64:ff9b::', length: 96n },
+  { prefix: '2002::', length: 16n },
 ];
 
 const LOCAL_SUFFIXES = ['.local', '.internal', '.localhost'];
@@ -189,7 +189,7 @@ function embeddedIpv4(address: string): string | undefined {
   if (embedding === undefined) {
     return undefined;
   }
-  const ipv4 = (value >> (96n - embedding.start)) & 0xffffffffn;
+  const ipv4 = (value >> (96n - embedding.length)) & 0xffffffffn;
   return [24n, 16n, 8n, 0n].map((shift) => String((ipv4 >> shift) & 0xffn)).join('.');
 }
 

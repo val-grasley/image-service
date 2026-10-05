@@ -920,8 +920,8 @@ would need a fallback for a lossy format with none, which cannot happen. Normali
 `format=source` too: the key is formed before the fetch, when the output format is unknown.
 **Consequences:** A `format=source` request on a png, TIFF, or GIF source still keys on
 quality. CloudFront's cache key is the raw query string, so the edge still keeps one entry
-per `quality` value; those entries are filled from the single in-process entry and share
-its ETag, which is unchanged behavior at the edge.
+per `quality` value; each is filled by whichever instance serves it, and for `format=png`
+they now carry one ETag where they used to carry one per `quality`.
 
 ## 59. Local-use NAT64 and Teredo are blocked whole; IPv4-translated addresses are read
 

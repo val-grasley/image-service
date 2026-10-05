@@ -357,8 +357,9 @@ Open design questions found during implementation:
 - **Unknown query parameters are ignored.** `?widht=5` returns 200 untransformed, and extra
   parameters let callers mint unlimited CloudFront cache keys; a 400 would tighten this.
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
-- **Smaller items.** A body truncated after a valid header maps to 500 rather than a 4xx;
-  the OpenAPI document omits response headers.
+- **Smaller items.** With `format` omitted, a PNG, TIFF, or GIF source still keys on
+  `quality`, since the key is formed before the fetch (decision 58); a body truncated after
+  a valid header maps to 500 rather than a 4xx; the OpenAPI document omits response headers.
 
 ## How this was built
 
