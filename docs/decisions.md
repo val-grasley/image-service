@@ -1204,10 +1204,11 @@ produce, widened as decision 64 widened it; the detail names the variable, the c
 size, and the limit. The route's 400 for out-of-range requested parameters is unchanged. An
 output no larger than the source on both axes is exempt from the first two checks: it is at
 most the source's size, which `MAX_INPUT_PIXELS` already bounds, so no aspect ratio can have
-inflated it. That covers every request without dimensions and every `fit`. The
-no-dimension exemption is the author's ruling; its generalization to any output no larger
-than the source was proposed in review and adopted, with the author informed. The AVIF cap is not exempt, because its reason is encode time, which an output
-the size of the source costs as much as an enlarged one.
+inflated it. That covers every request without dimensions and every `fit`. The no-dimension
+exemption is the author's ruling; its generalization to any output no larger than the source
+was proposed in review and adopted, with the author informed. The AVIF cap is not exempt,
+because its reason is encode time, which an output the size of the source costs as much as
+an enlarged one.
 **Rejected:** Holding every output to the limits: refuses a plain format conversion of a
 6000 by 4000 photograph that `MAX_INPUT_PIXELS` admits. Exempting only requests without
 dimensions (the first form of this ruling): `fit` never enlarges, so `width=4096` on a 3000

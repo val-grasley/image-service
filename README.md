@@ -32,14 +32,14 @@ curl -sS -o out2.jpg  "$L?url=$P&format=jpeg&quality=80"                        
 curl -sS -o out3.webp "$L?url=$J&width=800&height=600&format=webp&crop=fill"      # exactly 800 by 600
 ```
 
-Built: the API with `crop=fit|fill|scale|pad` and `format=jpeg|png|webp|avif`, a UI, a
-typed SDK and an OpenAPI document (the two bonuses taken), an SSRF-safe fetch policy, limits
-on every resource, per-client rate limiting, edge and in-process caching, RFC 9457 errors,
-and a CDK deployment reproducible from the repository. Bonuses not taken (decision 17):
-video thumbnails (decision 16), `format=auto` (decision 24), CI, metrics, and extra
-transformations such as rotate and blur. There is no
-authentication: the service is an open proxy bounded by rate limits (decision 29). The full
-list is under "Left out and next steps".
+Built: the API with `crop=fit|fill|scale|pad` and `format=jpeg|png|webp|avif`, a UI, a typed
+SDK and an OpenAPI document (the two bonuses taken), an SSRF-safe fetch policy, limits on
+every resource, per-client rate limiting, edge and in-process caching, RFC 9457 errors, and
+a CDK deployment reproducible from the repository. Bonuses not taken (decision 17): video
+thumbnails (decision 16), `format=auto` (decision 24), CI, metrics, and extra
+transformations such as rotate and blur. There is no authentication: the service is an open
+proxy bounded by rate limits (decision 29). The full list is under "Left out and next
+steps".
 
 ## Quick start
 
@@ -355,7 +355,7 @@ Credentials, account, and region come from the ambient AWS environment; the stac
 to use, and `FunctionUrl`, which refuses direct requests. `npm run synth` checks the template
 after `npm run build` with no credentials and no network.
 
-The first deploy confirms what synthesis cannot. Results from the live deployment:
+The first deploy confirms what synthesis cannot. Results from the live deployments:
 
 1. `GET /health` returns the version, so CloudFront's signed requests are accepted and the
    bundle loads arm64 sharp. Confirmed (`{"status":"ok","version":"0.1.0"}`).
@@ -368,12 +368,20 @@ The first deploy confirms what synthesis cannot. Results from the live deploymen
    while the other still gets 200. Confirmed with an IPv4 and an IPv6 client: exactly 60
    of 71 parallel requests succeeded, the rest got 429 with `Retry-After`, and the other
    client was unaffected, so `CloudFront-Viewer-Address` arrives.
-5. After a code change and redeploy, `/docs` and `/openapi.json` show the new version. Not
-   yet exercised; the first deployment is still the current one.
+5. After a code change and redeploy, `/docs` and `/openapi.json` show the new version.
+   Partly confirmed on the second deployment: CloudFront lists one invalidation of `/docs*`
+   and `/openapi.json` per function version, each completed. That release did not change the
+   document, so a changed document reaching viewers is still unobserved.
+6. A cross-origin preflight reaches the function. Confirmed on the second deployment:
+   `OPTIONS /process` with `Origin` and `Access-Control-Request-*` headers gets 204 from the
+   function with `Access-Control-Allow-Headers: If-None-Match,X-Request-Id` and
+   `Access-Control-Max-Age: 600`, and a `POST` still gets CloudFront's 403. The first
+   deployment answered the preflight with that 403 too, which is what decision 70 fixed.
 
 Encode times on Lambda (1536 MB, arm64), measured through the distribution on a cache miss:
 an 8 MP AVIF at the cap in 1.6 s, a 16 MP JPEG in 1.5 s, and a 16 MP WebP in 3.1 s, all
-inside the 5 s transform budget.
+inside the 5 s transform budget. A 13 MB TIFF source (4.4 MP) that the service had not
+fetched before became a 400 by 282 JPEG in 2.1 s, fetch included.
 
 **Cold starts.** A new instance loads the bundle and sharp's native library before answering,
 so its first request is slower, and its result and source caches start empty. No provisioned

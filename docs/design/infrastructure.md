@@ -162,6 +162,14 @@ deployment (us-east-2):
   A new account's Lambda concurrency quota is 10, which the function's reserved
   concurrency cannot fit; the quota has to be raised in the deployment region first.
 
+The second deployment confirmed what the first could not. The invalidation custom resource
+ran once for the new function version: CloudFront lists one invalidation of `/docs*` and
+`/openapi.json` per version, with the version string as its caller reference, each
+completed. That release did not change the document, so this shows the invalidation runs,
+not that a changed document reaches viewers. A preflight through the distribution is
+answered by the function, 204 with the fixed CORS allow-list, where the first deployment had
+returned CloudFront's 403 (decision 70); a `POST` still gets that 403.
+
 ## Tests
 
 `infra/lib/image-service-stack.test.ts` uses `Template.fromStack` on a stack synthesized
