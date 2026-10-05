@@ -1,7 +1,9 @@
 import { BlockList, isIP } from 'node:net';
 import type { Config } from '../config.ts';
 
-export type Decision = { allowed: true } | { allowed: false; reason: DenialReason; detail: string };
+// `range` is for the log; checkAddresses keeps it out of `detail`.
+export type Decision =
+  { allowed: true } | { allowed: false; reason: DenialReason; detail: string; range?: string };
 
 type DenialReason =
   | 'scheme'
@@ -30,8 +32,8 @@ const BLOCKED_IPV4: readonly (readonly [network: string, prefix: number])[] = [
 ];
 
 // The IPv4-compatible, IPv4-translated, well-known NAT64, and 6to4 prefixes are absent: they
-// are blocked only when the address they embed is, which embeddedIpv4 decides. IPv4-mapped addresses need
-// no entry because BlockList matches them against the IPv4 rules.
+// are blocked only when the address they embed is, which embeddedIpv4 decides. IPv4-mapped
+// addresses need no entry because BlockList matches them against the IPv4 rules.
 const BLOCKED_IPV6: readonly (readonly [network: string, prefix: number])[] = [
   ['::', 128],
   ['::1', 128],
@@ -109,8 +111,9 @@ export function checkAddresses(
   if (isExempt(host, effectivePort(url), policy.allowedHosts)) {
     return ALLOWED;
   }
-  // A detail never names the resolved address: inside a VPC that would hand any caller the
-  // internal DNS answer. The fetcher logs the addresses for operators.
+  // A detail names neither the resolved address nor its range: inside a VPC the first is an
+  // internal DNS answer and the second tells which private plan the name lives in. The fetcher
+  // logs the range, and the addresses at debug, for operators.
   for (const address of addresses) {
     if (isIP(address) === 0) {
       return deny(
@@ -120,11 +123,12 @@ export function checkAddresses(
     }
     const match = matchedRange(address);
     if (match !== undefined) {
-      const what = match.embedded === undefined ? 'an address' : 'an address embedding one';
-      return deny(
-        'blocked_address',
-        `Host ${host} resolves to ${what} in blocked range ${match.range}.`,
-      );
+      return {
+        allowed: false,
+        reason: 'blocked_address',
+        detail: `Host ${host} resolves to a private or reserved address.`,
+        range: match.range,
+      };
     }
   }
   return ALLOWED;

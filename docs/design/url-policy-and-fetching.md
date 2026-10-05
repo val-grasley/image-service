@@ -43,15 +43,18 @@ semantics in section 5.
 
 `checkAddresses` applies the address rules to every address; one blocked address denies,
 and so does a string that is not an IP address, since the fetcher could not connect to it as
-checked. `ALLOWED_HOSTS` exempts the host from this check. Its `detail` names the hostname
-and the range that matched (for an embedding prefix, the IPv4 range of the embedded
-address), never the resolved address or the embedded one, because inside a VPC that would
-hand any caller an internal DNS answer (decision 57). An IP-literal denial from `checkUrl`
-names the literal, which is the caller's own input.
+checked. `ALLOWED_HOSTS` exempts the host from this check. A blocked address's `detail` is
+the fixed category `Host <hostname> resolves to a private or reserved address.`, naming
+neither the address, nor an embedded one, nor the range: inside a VPC the address is an
+internal DNS answer and the range tells which private plan the name lives in (decision 57).
+The range that matched (for an embedding prefix, the IPv4 range of the embedded address)
+travels in the decision's `range` field, which only the log reads. An IP-literal denial from
+`checkUrl` names the literal and its range, since the literal is the caller's own input.
 
 **Range checks** use `node:net` `BlockList`, built once per process from the two tables in
-section 5, one `BlockList` per range so that `detail` can name the range that matched. IPv4
-ranges are added with `addSubnet(..., 'ipv4')` and IPv6 ranges with `addSubnet(..., 'ipv6')`.
+section 5, one `BlockList` per range so that a denial can name the range that matched (in
+`detail` for a literal, in `range` for an address). IPv4 ranges are added with
+`addSubnet(..., 'ipv4')` and IPv6 ranges with `addSubnet(..., 'ipv6')`.
 `check` is called with the address family as its second argument (`'ipv6'` for any IPv6
 literal); with the family omitted an IPv6 input is never matched. `BlockList` matches
 IPv4-mapped addresses (`::ffff:a.b.c.d`) against IPv4 rules when checked as `'ipv6'`, and
@@ -180,11 +183,11 @@ safe because the entry was admitted by the policy and cannot outlive the TTL.
 
 ## Logging
 
-On denial: `info` with `hostname` and `reason`. On fetch: `info` with `hostname`, final
-hostname if different, `upstreamStatus`, `bytes`, `hops`, `durationMs`. Resolved addresses
-only at `debug`, in a `source resolved` line with `hostname` and `addresses`, which is where
-an operator finds the address behind an address denial, since the problem's `detail` omits
-it. Never the full URL.
+On denial: `info` with `hostname` and `reason`, plus `range` for an address denial, since
+the problem's `detail` omits it. On fetch: `info` with `hostname`, final hostname if
+different, `upstreamStatus`, `bytes`, `hops`, `durationMs`. Resolved addresses only at
+`debug`, in a `source resolved` line with `hostname` and `addresses`, which is where an
+operator finds the address behind an address denial. Never the full URL.
 
 ## Test table
 
@@ -207,8 +210,8 @@ expectation. Required rows, grouped:
   address just outside it.
 - **Addresses:** a public name resolving to one address in each blocked range; one public
   plus one private address denies; a zone-indexed address in an embedding prefix is judged by
-  its embedded address; each denial's `detail` names the range and not the address; a
-  resolution that is not an IP address denies; `ALLOWED_HOSTS` with
+  its embedded address; each denial's `detail` is the fixed category and its `range` the
+  matching range; a resolution that is not an IP address denies; `ALLOWED_HOSTS` with
   port reaching `127.0.0.1:<port>` and denied at `127.0.0.1:<other>`; without a port,
   allowed on 443 and denied on a high port.
 - **Downgrade:** `https` previous hop to `http` current denied; `http` to `https` allowed.

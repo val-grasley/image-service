@@ -121,8 +121,15 @@ describe('redirects', () => {
       );
     });
     expect(error?.code).toBe('url_not_allowed');
-    expect(error?.detail).toBe(
-      'Host internal.example resolves to an address in blocked range 10.0.0.0/8.',
+    expect(error?.detail).toBe('Host internal.example resolves to a private or reserved address.');
+    expect(logEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        msg: 'source denied',
+        hostname: 'internal.example',
+        reason: 'blocked_address',
+        range: '10.0.0.0/8',
+      }),
     );
     expect(logEntries()).toContainEqual(
       expect.objectContaining({
@@ -300,8 +307,15 @@ describe('addresses', () => {
       );
     });
     expect(error?.code).toBe('url_not_allowed');
-    expect(error?.detail).toBe(
-      'Host internal.example resolves to an address in blocked range 127.0.0.0/8.',
+    expect(error?.detail).toBe('Host internal.example resolves to a private or reserved address.');
+    expect(logEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        msg: 'source denied',
+        hostname: 'internal.example',
+        reason: 'blocked_address',
+        range: '127.0.0.0/8',
+      }),
     );
     expect(logEntries()).toContainEqual(
       expect.objectContaining({

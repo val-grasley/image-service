@@ -28,9 +28,13 @@ function literal(host: string, range: string): Decision {
   return denied('blocked_literal', `Address ${host} is in blocked range ${range}.`);
 }
 
-function resolvesTo(host: string, range: string, embedding = false): Decision {
-  const what = embedding ? 'an address embedding one' : 'an address';
-  return denied('blocked_address', `Host ${host} resolves to ${what} in blocked range ${range}.`);
+function resolvesTo(host: string, range: string): Decision {
+  return {
+    allowed: false,
+    reason: 'blocked_address',
+    detail: `Host ${host} resolves to a private or reserved address.`,
+    range,
+  };
 }
 
 type UrlCase = { name: string; url: string; previous?: string; expect: Decision };
@@ -532,7 +536,7 @@ describe('checkUrl', () => {
   });
 });
 
-const blockedResolutions: [address: string, range: string, embedding?: boolean][] = [
+const blockedResolutions: [address: string, range: string][] = [
   ['0.0.0.1', '0.0.0.0/8'],
   ['10.0.0.1', '10.0.0.0/8'],
   ['100.64.0.1', '100.64.0.0/10'],
@@ -547,28 +551,28 @@ const blockedResolutions: [address: string, range: string, embedding?: boolean][
   ['::', '::/128'],
   ['::1', '::1/128'],
   ['::ffff:127.0.0.1', '127.0.0.0/8'],
-  ['::127.0.0.1', '127.0.0.0/8', true],
-  ['64:ff9b::a00:1', '10.0.0.0/8', true],
+  ['::127.0.0.1', '127.0.0.0/8'],
+  ['64:ff9b::a00:1', '10.0.0.0/8'],
   ['64:ff9b:1::a00:1', '64:ff9b:1::/48'],
   ['64:ff9b:1:808:8:808:808:808', '64:ff9b:1::/48'],
-  ['::ffff:0:a00:1', '10.0.0.0/8', true],
+  ['::ffff:0:a00:1', '10.0.0.0/8'],
   ['2001:0:4136:e378:8000:63bf:3fff:fdd2', '2001::/32'],
-  ['2002:a00:1::', '10.0.0.0/8', true],
+  ['2002:a00:1::', '10.0.0.0/8'],
   ['fc00::1', 'fc00::/7'],
   ['fe80::1', 'fe80::/10'],
   ['fe80::1%eth0', 'fe80::/10'],
-  ['2002:a00:1::%eth0', '10.0.0.0/8', true],
+  ['2002:a00:1::%eth0', '10.0.0.0/8'],
   ['fec0::1', 'fec0::/10'],
   ['ff02::1', 'ff00::/8'],
 ];
 
 describe('checkAddresses', () => {
   const cases: { name: string; url: string; addresses: string[]; expect: Decision }[] = [
-    ...blockedResolutions.map(([address, range, embedding]) => ({
-      name: `denies a public name resolving to ${address} in ${range}, naming only the range`,
+    ...blockedResolutions.map(([address, range]) => ({
+      name: `denies a public name resolving to ${address}, naming ${range} only outside the detail`,
       url: 'https://photos.example/a.jpg',
       addresses: [address],
-      expect: resolvesTo('photos.example', range, embedding),
+      expect: resolvesTo('photos.example', range),
     })),
     {
       name: 'allows a name resolving to public IPv4 and IPv6 addresses',

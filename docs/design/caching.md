@@ -64,10 +64,11 @@ requests differing only in `quality` share one key and one ETag (decision 58). I
 number for `format=source`, because the key is formed before the source is fetched, when
 the output format is not yet known, so a source that resolves to png still keys on quality.
 CloudFront's cache key is the raw query string, so the edge still keeps one entry per
-`quality` value; each such edge entry is filled by whichever instance serves it and carries
-the same ETag. The leading `v1` is bumped if the key format changes. `url` is the href as received,
-not the redirect target, so two source URLs that redirect to the same place are two entries;
-this is correct because their upstream validators may differ.
+`quality` value; each such edge entry is filled by whichever instance serves it and, for
+`format=png`, carries the same ETag. The leading `v1` is bumped if the key format changes.
+`url` is the href as received, not the redirect target, so two source URLs that redirect to
+the same place are two entries; this is correct because their upstream validators may
+differ.
 
 ## ETag
 

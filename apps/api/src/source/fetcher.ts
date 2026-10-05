@@ -89,7 +89,11 @@ function enforce(decision: Decision, url: URL, log: Logger): void {
   if (decision.allowed) {
     return;
   }
-  log.info('source denied', { hostname: url.hostname, reason: decision.reason });
+  log.info('source denied', {
+    hostname: url.hostname,
+    reason: decision.reason,
+    range: decision.range,
+  });
   throw new ServiceError('url_not_allowed', decision.detail);
 }
 
