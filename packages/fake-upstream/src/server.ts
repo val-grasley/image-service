@@ -42,6 +42,13 @@ const CHUNK_BYTES = 64 * 1024;
 // Ends inside the quantization tables, so the signature survives but the frame header that
 // holds the dimensions does not.
 const TRUNCATED_JPEG_BYTES = 100;
+// Large enough that the first half of the file holds the whole header, so the dimensions can
+// be read but the pixel data ends early.
+const TRUNCATED_PIXELS_IMAGE: Omit<ImageSpec, 'format'> = {
+  width: 300,
+  height: 200,
+  pattern: 'quadrants',
+};
 
 const HTML = '<!doctype html><title>Not an image</title><p>Not an image.</p>';
 // RFC 9110 forbids content on these, so they get no text body and no Content-Length.
@@ -192,6 +199,15 @@ async function respond(res: ServerResponse, record: RequestRecord): Promise<void
       ...(orientation === undefined ? {} : { orientation }),
     });
     send(res, record, 200, { 'Content-Type': CONTENT_TYPES[format] }, image.bytes);
+    return;
+  }
+
+  const cut = /^\/truncated-pixels\/(\w+)$/.exec(pathname)?.[1];
+  if (cut !== undefined) {
+    if (cut !== 'jpeg' && cut !== 'png') throw new RangeError('format must be jpeg or png.');
+    const image = await generateImage({ ...TRUNCATED_PIXELS_IMAGE, format: cut });
+    const bytes = image.bytes.subarray(0, Math.floor(image.bytes.byteLength / 2));
+    send(res, record, 200, { 'Content-Type': CONTENT_TYPES[cut] }, bytes);
     return;
   }
 

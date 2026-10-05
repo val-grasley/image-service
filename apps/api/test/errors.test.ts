@@ -128,6 +128,7 @@ describe('error responses', () => {
     '/status/404',
     '/html',
     '/truncated',
+    '/truncated-pixels/jpeg',
     '/gzip',
     '/huge?bytes=1000001',
   ];

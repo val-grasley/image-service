@@ -83,6 +83,11 @@ describe('startFakeUpstream', () => {
     { name: 'a redirect status outside 3xx', path: '/redirect?to=/html&status=200', status: 400 },
     { name: 'a chain of zero hops', path: '/redirect/chain/0?to=/html', status: 400 },
     { name: 'a status below 200', path: '/status/101', status: 400 },
+    {
+      name: 'a truncated-pixels format other than jpeg or png',
+      path: '/truncated-pixels/gif',
+      status: 400,
+    },
     { name: 'an unknown path', path: '/nothing-here', status: 404 },
   ];
   for (const c of rejected) {
@@ -197,6 +202,16 @@ describe('startFakeUpstream', () => {
     expect([...response.body.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
     await expect(sharp(response.body).metadata()).rejects.toThrow();
   });
+
+  for (const format of ['jpeg', 'png'] as const) {
+    it(`serves a ${format} whose header reads but whose pixels are cut off on /truncated-pixels/${format}`, async () => {
+      const response = await fetchPath(`/truncated-pixels/${format}`);
+      expect(response.headers['content-type']).toBe(`image/${format}`);
+      const metadata = await sharp(response.body).metadata();
+      expect([metadata.format, metadata.width, metadata.height]).toEqual([format, 300, 200]);
+      await expect(sharp(response.body).png().toBuffer()).rejects.toThrow();
+    });
+  }
 
   it('serves a gzip-encoded image on /gzip', async () => {
     const response = await fetchPath('/gzip');

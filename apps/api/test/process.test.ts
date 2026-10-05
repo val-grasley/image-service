@@ -419,3 +419,21 @@ describe('GET /process output limits', () => {
     expect(await decoded(accepted)).toEqual({ format: 'heif', width: 320, height: 240 });
   });
 });
+
+describe('GET /process on a source whose header reads but whose pixels do not decode', () => {
+  for (const format of ['jpeg', 'png']) {
+    it(`answers a truncated ${format} with 415 unsupported_source_type, while /info describes it`, async () => {
+      const { request } = createHarness(fake);
+      const url = sourceUrl(fake, `/truncated-pixels/${format}`);
+      const processed = await request(query('/process', { url, width: '100' }));
+      expect(processed.status).toBe(415);
+      expect(await processed.json()).toMatchObject({
+        code: 'unsupported_source_type',
+        detail: 'The source image could not be decoded; it may be truncated or corrupt.',
+      });
+      const described = await request(query('/info', { url }));
+      expect(described.status).toBe(200);
+      expect(await described.json()).toMatchObject({ format, width: 300, height: 200 });
+    });
+  }
+});

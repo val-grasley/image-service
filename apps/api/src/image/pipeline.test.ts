@@ -303,6 +303,51 @@ describe('inspect', () => {
   });
 });
 
+describe('transform on a source that passes inspect but cannot be decoded', () => {
+  const half = (bytes: Uint8Array) => bytes.subarray(0, Math.floor(bytes.byteLength / 2));
+  const truncatedAt = (twentieths: number) => (bytes: Uint8Array) =>
+    bytes.subarray(0, Math.floor((bytes.byteLength * twentieths) / 20));
+  const corruptedAt = (twentieths: number) => (bytes: Uint8Array) => {
+    const damaged = Uint8Array.from(bytes);
+    const start = Math.floor((bytes.byteLength * twentieths) / 20);
+    for (let index = start; index < start + 16; index++) {
+      damaged[index] = (damaged[index] ?? 0) ^ 0xff;
+    }
+    return damaged;
+  };
+  // Each damage was found by probing sharp 0.35.5 for one that leaves the header readable and
+  // makes the named libvips domain report the failure.
+  const cases: { format: SourceType; damage: (bytes: Uint8Array) => Uint8Array; domain: string }[] =
+    [
+      { format: 'jpeg', damage: half, domain: 'VipsJpeg' },
+      { format: 'jpeg', damage: corruptedAt(10), domain: 'VipsJpeg' },
+      { format: 'png', damage: half, domain: 'vipspng' },
+      { format: 'webp', damage: corruptedAt(10), domain: 'webp2vips' },
+      { format: 'gif', damage: corruptedAt(7), domain: 'gifload_buffer' },
+      { format: 'tiff', damage: truncatedAt(17), domain: 'tiff2vips' },
+      { format: 'avif', damage: truncatedAt(17), domain: 'source' },
+    ];
+  for (const c of cases) {
+    it(`maps a damaged ${c.format} reported by ${c.domain} to unsupported_source_type`, async () => {
+      const image = await generateImage({
+        width: 300,
+        height: 200,
+        format: c.format,
+        pattern: 'quadrants',
+      });
+      const bytes = c.damage(image.bytes);
+      const info = await inspect(bytes, c.format);
+      const spec = toSpec({ url: 'https://images.example/source', format: 'png' }, { quality: 80 });
+      const refused = transform(bytes, info, spec, limits);
+      await expect(refused).rejects.toMatchObject({ code: 'unsupported_source_type' });
+      await expect(refused).rejects.toHaveProperty(
+        'cause.message',
+        expect.stringMatching(new RegExp(`^${c.domain}: `)),
+      );
+    });
+  }
+});
+
 describe('fromSharpError', () => {
   const cases: { name: string; error: unknown; code: ServiceError['code'] }[] = [
     { name: 'a bare timeout', error: new Error('timeout: 0% complete'), code: 'transform_timeout' },
@@ -327,6 +372,67 @@ describe('fromSharpError', () => {
       code: 'internal_error',
     },
     { name: 'a thrown non-error', error: 'timeout: 5% complete', code: 'internal_error' },
+    {
+      name: 'a truncated jpeg encoded as jpeg',
+      error: new Error('VipsJpeg: premature end of JPEG image'),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'a truncated jpeg encoded as png',
+      error: new Error(
+        'VipsJpeg: premature end of JPEG image\nvips2png: unable to write to target target',
+      ),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'corrupt jpeg data',
+      error: new Error('VipsJpeg: Corrupt JPEG data: bad Huffman code'),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'a truncated png',
+      error: new Error('vipspng: libpng read error\nvips2png: unable to write to target target'),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'corrupt webp data',
+      error: new Error('webp2vips: unable to read pixels'),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'corrupt gif data',
+      error: new Error('gifload_buffer: Invalid frame data'),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'a truncated tiff',
+      error: new Error('tiff2vips: Quantization table 0x00 was not defined\ntiff2vips: read error'),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'a truncated avif',
+      error: new Error(
+        'source: bad seek to 1024\nheif: Invalid input: Unexpected end of file: Extent in iloc box references data outside of file bounds (points to file position 250)\n (2.100)',
+      ),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'a loader warning escalated by failOn',
+      error: new Error(
+        'Warning treated as error due to failOn setting\ntiff2vips: Bogus DQT index 8',
+      ),
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'an encoder failure with no loader line',
+      error: new Error('vips2png: unable to write to target target'),
+      code: 'internal_error',
+    },
+    {
+      name: 'a loader domain mentioned after the first line',
+      error: new Error('vips2png: unable to write to target target\nVipsJpeg: out of memory'),
+      code: 'internal_error',
+    },
   ];
   for (const c of cases) {
     it(`maps ${c.name} to ${c.code} and keeps it as the cause`, () => {

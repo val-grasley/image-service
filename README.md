@@ -161,7 +161,7 @@ into `/docs`.
 | Malformed, out-of-range, or unknown parameters, including output dimensions over limits | 400 | `invalid_parameter` |
 | URL blocked by policy, including a blocked redirect hop or the loop marker | 403 | `url_not_allowed` |
 | Source exceeds `MAX_SOURCE_BYTES` or `MAX_INPUT_PIXELS` | 413 | `source_too_large` |
-| Source is not a supported image type | 415 | `unsupported_source_type` |
+| Source is not a supported image type, or cannot be decoded | 415 | `unsupported_source_type` |
 | Output exceeds `MAX_OUTPUT_BYTES`, or an AVIF output would exceed `MAX_AVIF_OUTPUT_PIXELS` | 422 | `output_too_large` |
 | Rate limited | 429 | `rate_limited` |
 | Upstream returned non-2xx, was unreachable, or refused the connection | 502 | `upstream_error` |
@@ -356,8 +356,7 @@ Open design questions found during implementation:
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
 - **Smaller items.** With `format` omitted, a PNG, TIFF, or GIF source still makes one
   in-process result-cache entry per `quality`, since the key is formed before the fetch; its
-  ETag and conditional requests do not vary (decisions 58 and 60); a body truncated after a
-  valid header maps to 500 rather than a 4xx.
+  ETag and conditional requests do not vary (decisions 58 and 60).
 
 ## How this was built
 

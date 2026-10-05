@@ -166,8 +166,18 @@ sharp's timeout surfaces as an `Error` whose message starts with the line
 0.35.5: `timeout: 43% complete\nVipsImage: killed for image "temp-97"`; decision 41);
 `fromSharpError` maps a message matching `/^timeout: \d+% complete(?:\n|$)/` to
 `transform_timeout`. sharp's input-too-large error (`Input image exceeds pixel limit`)
-maps to `source_too_large`. Anything else propagates as `internal_error` with the original
-as `cause`.
+maps to `source_too_large`. A source whose header `inspect` read but whose pixel data
+fails to decode, such as a truncated or corrupt file, maps to `unsupported_source_type`
+(decision 66). libvips starts each error message with the domain that raised it, so the
+match is on the first line starting with the domain of a loader for an accepted type or of
+libvips's input source, observed with sharp 0.35.5 as `VipsJpeg: ` (for example
+`VipsJpeg: premature end of JPEG image`), `vipspng: ` (`vipspng: libpng read error`),
+`webp2vips: `, `gifload_buffer: `, `tiff2vips: `, and `source: ` (a truncated AVIF reports
+`source: bad seek to <n>` before libheif's own line), or on sharp's own first line
+`Warning treated as error due to failOn setting`, which sharp writes when `failOn`
+escalates a loader warning. An error whose first line comes from an encoder, such as
+`vips2png: unable to write to target target`, is not matched. Anything else propagates as
+`internal_error` with the original as `cause`.
 
 ## Tests
 
@@ -208,6 +218,12 @@ change, and contains the href.
 - A source above a small `maxInputPixels` throws `source_too_large` from the operation's
   check after `inspect`; `transform` called directly on the same source, without that
   check, also throws `source_too_large` (mapped from sharp's pixel-limit error).
+- A source damaged so that `inspect` reads it but the decode fails, one per loader domain
+  (halved jpeg and png, corrupted jpeg, webp, and gif, truncated tiff and avif, each found by
+  probing), throws `unsupported_source_type` with the matched domain on the cause.
+- `fromSharpError` table: each observed decode message maps to `unsupported_source_type`;
+  an encoder-only message, and a loader domain after the first line, map to
+  `internal_error`.
 - `transform_timeout` mapping is tested by constructing the error sharp produces; a real
   timeout is not provoked in tests because the whole-second granularity makes it
   machine-dependent (decision 33).

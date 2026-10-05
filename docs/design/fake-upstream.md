@@ -74,6 +74,7 @@ or a spec the generator refuses, is answered 400 with a one-line text body.
 | `/no-length?bytes=` | Chunked body of that length, no `Content-Length` |
 | `/wrong-type` | PNG bytes with `Content-Type: text/html` |
 | `/html`, `/svg`, `/truncated` | Non-image, SVG, and a cut-off JPEG header |
+| `/truncated-pixels/:format` | The first half of a 300 by 200 `quadrants` JPEG or PNG (`format` is `jpeg` or `png`): the header and dimensions read, the pixel data ends early |
 | `/gzip` | A gzip-encoded image with `Content-Encoding: gzip` |
 | `/status/:code` | That status (200 to 599) with a short text body; 204, 205, and 304 carry no body and no `Content-Length` |
 | `/with-validators?etag=&lastModified=` | An image with `ETag`, `Last-Modified`, `Set-Cookie`, `X-Powered-By`; `etag` and `lastModified` replace the two validators, and an empty value omits that header |

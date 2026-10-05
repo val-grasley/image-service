@@ -20,7 +20,7 @@ const EXPLANATIONS: Record<ErrorCode, string> = {
     'The path exists but does not accept this method; the Allow header lists the methods it does.',
   source_too_large: 'The source exceeds the byte limit or the pixel limit.',
   unsupported_source_type:
-    'Judged from its bytes, the source is not a JPEG, PNG, WebP, GIF, AVIF, or TIFF image.',
+    'Judged from its bytes, the source is not a JPEG, PNG, WebP, GIF, AVIF, or TIFF image, or it is one whose pixel data cannot be decoded, for example because the file is truncated.',
   output_too_large:
     'The encoded image exceeds the output byte limit, or an AVIF output would exceed the AVIF pixel limit; request smaller dimensions or another format.',
   rate_limited:
