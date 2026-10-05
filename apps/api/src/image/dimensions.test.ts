@@ -77,16 +77,28 @@ const cases: {
     expect: { width: 100, height: 50 },
   },
   {
-    name: 'scale with a width alone keeps the source height',
+    name: 'scale with a width alone derives the height from the aspect ratio',
     source: { width: 400, height: 200 },
     spec: { width: 200, crop: 'scale' },
-    expect: { width: 200, height: 200 },
+    expect: { width: 200, height: 100 },
   },
   {
-    name: 'scale with a height alone keeps the source width',
+    name: 'scale with a height alone derives the width from the aspect ratio',
     source: { width: 400, height: 200 },
     spec: { height: 50, crop: 'scale' },
-    expect: { width: 400, height: 50 },
+    expect: { width: 100, height: 50 },
+  },
+  {
+    name: 'scale enlarges to a larger width alone, keeping the aspect ratio',
+    source: { width: 400, height: 200 },
+    spec: { width: 1000, crop: 'scale' },
+    expect: { width: 1000, height: 500 },
+  },
+  {
+    name: 'scale enlarges to a larger height alone, keeping the aspect ratio',
+    source: { width: 400, height: 200 },
+    spec: { height: 1000, crop: 'scale' },
+    expect: { width: 2000, height: 1000 },
   },
   {
     name: 'fit never enlarges past a larger box',

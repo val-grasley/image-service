@@ -52,12 +52,10 @@ AVIF pixel cap can refuse a request without paying for it. It reproduces sharp's
 arithmetic (`ResolveShrink` in sharp's `common.cc`, verified against sharp 0.35.5):
 
 - No dimension: the source size.
-- `fill` and `pad` with both dimensions, and `scale` with either or both: the requested
-  dimensions, with an omitted one staying the source's (sharp's `fit: 'fill'`, which is our
-  `scale`, ignores the aspect ratio, so it does not derive the other dimension).
+- `fill`, `scale`, and `pad` with both dimensions: the requested dimensions.
 - Otherwise one uniform shrink factor, source over target: for `fit` the larger of the two
-  factors and never below 1 (`withoutEnlargement`); for `fill` and `pad` with one dimension,
-  that dimension's factor. Each axis is the source axis divided by the factor, capped so no
+  factors and never below 1 (`withoutEnlargement`); for `fill`, `scale`, and `pad` with one
+  dimension, that dimension's factor. Each axis is the source axis divided by the factor, capped so no
   axis drops below one pixel, rounded half up as libvips does.
 
 JPEG and WebP sources decoded with shrink-on-load can differ from this arithmetic, usually by
@@ -127,12 +125,15 @@ defaults to 1 when sharp omits it. A header sharp cannot parse throws
 |---|---|---|---|
 | `fit` | `inside` | true | At most the requested box, aspect preserved, never larger than the source |
 | `fill` | `cover` | false | Exactly the requested size, center crop, may enlarge |
-| `scale` | `fill` | false | Exactly the requested size, aspect ignored, may enlarge |
+| `scale` | `fill` with both dimensions, `inside` with one | false | Exactly the requested size, aspect ignored, may enlarge; with one dimension, the other follows the aspect ratio |
 | `pad` | `contain` | false | Exactly the requested size, aspect preserved, padded |
 
 With one dimension: sharp scales to that dimension preserving aspect; `fit` still passes
 `withoutEnlargement: true`, the others do not. sharp's `fill` means stretch, which is our
-`scale`; the mapping is one function with one test per row on a non-square source.
+`scale`; with only one dimension sharp's `fill` keeps the omitted one at the source's
+instead of deriving it, so `scale` with one dimension passes `inside` without
+`withoutEnlargement`, which derives it and may enlarge (decision 67). The mapping is one
+function with one test per row on a non-square source.
 
 `pad` background: transparent when the output format supports alpha (png, webp, avif),
 else white. `fill` crops from the center; `gravity` and attention-based cropping are not

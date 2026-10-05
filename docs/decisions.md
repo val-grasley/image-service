@@ -1161,3 +1161,27 @@ loader before an unrelated failure would read as 415 too; every warning the prob
 from a damaged source. `/info` reads only the header,
 so it still describes such a source with 200. The fake upstream gains
 `/truncated-pixels/:format` for the integration test.
+
+## 67. `crop=scale` with one dimension derives the other from the aspect ratio
+
+**Date:** 2026-10-04
+**Context:** Architecture section 7 says one of `width` and `height` "may be omitted to keep
+aspect", the pipeline design's resize mapping says that with one dimension "sharp scales to
+that dimension preserving aspect", and the OpenAPI parameter descriptions promise the same.
+The implementation mapped `scale` to sharp's `fit: 'fill'` regardless, and sharp's `fill`
+ignores the aspect ratio even for an omitted dimension: `ResolveShrink` leaves that axis's
+shrink at 1, so a 400 by 200 source with `width=200&crop=scale` came out 200 by 200, the
+source height kept. Found while writing `outputDimensions` (decision 64), which had copied
+the behavior.
+**Decision:** The documents govern. With both dimensions `scale` still uses `fit: 'fill'`;
+with one it uses `fit: 'inside'` without `withoutEnlargement`, which derives the other
+dimension from the aspect ratio and, unlike `fit`, may enlarge. With one dimension sharp's
+`inside`, `cover`, and `contain` resolve the same uniform shrink, and `inside` was chosen
+because it does no crop or embed step. `outputDimensions` treats `scale` like `fill` and
+`pad`. `PIPELINE_REVISION` is bumped, since outputs for those requests change.
+**Rejected:** Changing the documents to the implemented behavior: a one-dimension request
+that keeps the other source dimension is a stretch nobody asks for, and the common meaning
+of a scale crop (Cloudinary's `c_scale`, for one) keeps the aspect ratio.
+**Consequences:** `scale` with one dimension now gives the same size as `fill` and `pad`
+with that dimension. The ETag includes the revision, so an edge copy of an old output fails
+revalidation after a deploy and is replaced.

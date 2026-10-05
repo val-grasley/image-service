@@ -14,13 +14,11 @@ export function outputDimensions(
     case 'fit':
       return scaled(source, Math.max(1, widthShrink ?? 1, heightShrink ?? 1));
     case 'fill':
+    case 'scale':
     case 'pad':
       return width !== undefined && height !== undefined
         ? { width, height }
         : scaled(source, widthShrink ?? heightShrink ?? 1);
-    case 'scale':
-      // sharp ignores the aspect ratio here, so an omitted dimension stays the source's.
-      return { width: width ?? source.width, height: height ?? source.height };
   }
 }
 

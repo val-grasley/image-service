@@ -1,4 +1,4 @@
-import type { CropMode, OutputFormat, SourceInfo, SourceType } from '@image-service/sdk';
+import type { OutputFormat, SourceInfo, SourceType } from '@image-service/sdk';
 import sharp, { type ResizeOptions, type Sharp } from 'sharp';
 import type { Config } from '../config.ts';
 import { ServiceError } from '../errors.ts';
@@ -20,7 +20,7 @@ type PipelineLimits = Pick<
   'maxInputPixels' | 'transformTimeoutSeconds' | 'maxOutputBytes' | 'maxAvifOutputPixels'
 >;
 
-export const PIPELINE_REVISION = '3';
+export const PIPELINE_REVISION = '4';
 
 export function pipelineVersion(): string {
   return `${sharp.versions.sharp}/${PIPELINE_REVISION}`;
@@ -94,7 +94,7 @@ export async function transform(
     image = image.flatten({ background: WHITE });
   }
   if (spec.width !== undefined || spec.height !== undefined) {
-    image = image.resize(spec.width, spec.height, resizeOptions(spec.crop, format));
+    image = image.resize(spec.width, spec.height, resizeOptions(spec, format));
   }
   const output = await encode(image, target)
     .toBuffer({ resolveWithObject: true })
@@ -116,14 +116,21 @@ export async function transform(
   };
 }
 
-function resizeOptions(crop: CropMode, format: OutputFormat): ResizeOptions {
+function resizeOptions(
+  { crop, width, height }: Pick<TransformSpec, 'crop' | 'width' | 'height'>,
+  format: OutputFormat,
+): ResizeOptions {
   switch (crop) {
     case 'fit':
       return { fit: 'inside', withoutEnlargement: true };
     case 'fill':
       return { fit: 'cover', withoutEnlargement: false };
     case 'scale':
-      return { fit: 'fill', withoutEnlargement: false };
+      // sharp's fill ignores the aspect ratio even for an omitted dimension, which it would
+      // keep at the source's; inside derives it from the one given.
+      return width !== undefined && height !== undefined
+        ? { fit: 'fill', withoutEnlargement: false }
+        : { fit: 'inside', withoutEnlargement: false };
     case 'pad':
       // JPEG is the only output format without an alpha channel.
       return {
