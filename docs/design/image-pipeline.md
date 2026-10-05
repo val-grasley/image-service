@@ -141,7 +141,8 @@ change, and contains the href.
 - Each output format round-trips through `inspect`; `format: 'source'` on tiff and gif
   yields png.
 - `quality` 10 versus 90 on jpeg produces fewer bytes; `quality` on png is ignored (two
-  outputs byte-identical), both for `format: 'png'` and for `'source'` on a png source.
+  outputs byte-identical) for `format: 'source'` on a png source, the one path where a spec
+  quality can meet the PNG encoder, since a `format: 'png'` spec carries none.
 - A `noise` source whose png output exceeds a small `maxOutputBytes` throws
   `output_too_large`; the same with jpeg passes.
 - A source above a small `maxInputPixels` throws `source_too_large` from the operation's
