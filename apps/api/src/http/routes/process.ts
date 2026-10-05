@@ -1,10 +1,11 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
+import { OUTPUT_FORMATS } from '@image-service/sdk';
 import type { Config } from '../../config.ts';
 import { toSpec } from '../../image/spec.ts';
 import type { OperationDeps } from '../../operations/deps.ts';
 import { processImage } from '../../operations/process-image.ts';
 import type { AppEnv } from '../context.ts';
-import { problemResponses } from '../openapi.ts';
+import { commonHeaders, header, problemResponses } from '../openapi.ts';
 
 export const sourceUrlParam = z.url({ error: 'must be an absolute URL' }).openapi({
   description: 'Absolute http or https URL of the source image.',
@@ -73,11 +74,14 @@ export type ProcessQuery = z.output<ReturnType<typeof processQuery>>;
 
 const BINARY = { schema: z.string().openapi({ format: 'binary' }) };
 
+const ETAG = header('Strong validator of this result; send it in If-None-Match to revalidate.');
+
 export function addProcessRoute(
   app: OpenAPIHono<AppEnv>,
   config: Config,
   deps: OperationDeps,
 ): void {
+  const cacheControl = `public, max-age=${String(config.resultCacheTtlSeconds)}`;
   const route = createRoute({
     method: 'get',
     path: '/process',
@@ -86,6 +90,33 @@ export function addProcessRoute(
     responses: {
       200: {
         description: 'The transformed image.',
+        headers: {
+          ...commonHeaders(cacheControl),
+          ETag: ETAG,
+          'Content-Length': header(
+            'Size of the image in bytes. A streamed response may arrive chunked without it, so measure the body.',
+            { type: 'integer' },
+            false,
+          ),
+          'X-Image-Width': header('Width of the image in pixels.', { type: 'integer' }),
+          'X-Image-Height': header('Height of the image in pixels.', { type: 'integer' }),
+          'X-Image-Format': header('Encoding of the image.', {
+            type: 'string',
+            enum: [...OUTPUT_FORMATS],
+          }),
+          'X-Result-Cache': header(
+            "Whether this instance's in-process result cache answered; says nothing about the CDN.",
+            { type: 'string', enum: ['hit', 'miss'] },
+          ),
+          'X-Content-Type-Options': header('Browsers must not sniff the type.', {
+            type: 'string',
+            const: 'nosniff',
+          }),
+          'Content-Disposition': header('Display the image rather than download it.', {
+            type: 'string',
+            const: 'inline',
+          }),
+        },
         content: {
           'image/jpeg': BINARY,
           'image/png': BINARY,
@@ -93,7 +124,10 @@ export function addProcessRoute(
           'image/avif': BINARY,
         },
       },
-      304: { description: 'The image named by If-None-Match is unchanged.' },
+      304: {
+        description: 'The image named by If-None-Match is unchanged.',
+        headers: { ...commonHeaders(cacheControl), ETag: ETAG },
+      },
       ...problemResponses([
         'invalid_parameter',
         'url_not_allowed',
@@ -109,7 +143,6 @@ export function addProcessRoute(
       ]),
     },
   });
-  const cacheControl = `public, max-age=${String(config.resultCacheTtlSeconds)}`;
 
   app.openapi(route, async (c) => {
     const spec = toSpec(c.req.valid('query'), { quality: config.defaultQuality });

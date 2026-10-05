@@ -1,5 +1,6 @@
 import { z, type OpenAPIHono, type RouteConfig } from '@hono/zod-openapi';
 import type { ErrorCode } from '@image-service/sdk';
+import { WINDOW_MS } from '../rate-limit/limiter.ts';
 import type { AppEnv } from './context.ts';
 import { ERROR_CODES, STATUS } from './errors.ts';
 
@@ -28,6 +29,60 @@ const problemDetails = z
   .openapi('ProblemDetails');
 
 export type ProblemDetailsBody = z.output<typeof problemDetails>;
+
+type Header = {
+  description: string;
+  required: boolean;
+  schema: { type: 'string' | 'integer'; enum?: string[]; const?: string };
+};
+
+export function header(
+  description: string,
+  schema: Header['schema'] = { type: 'string' },
+  required = true,
+): Header {
+  return { description, required, schema };
+}
+
+// Set on every response by the request-id and cors middleware; the route supplies its own
+// Cache-Control value.
+export function commonHeaders(cacheControl: string): Record<string, Header> {
+  return {
+    'Cache-Control': header('How long caches may keep this response.', {
+      type: 'string',
+      const: cacheControl,
+    }),
+    'X-Request-Id': header(
+      "Identifies this request: the caller's X-Request-Id if it matches [A-Za-z0-9._-]{1,64}, else a generated one.",
+    ),
+    'Access-Control-Allow-Origin': header('Any origin may read the response.', {
+      type: 'string',
+      const: '*',
+    }),
+    'Access-Control-Expose-Headers': header(
+      'The response headers a browser script may read: ETag, X-Request-Id, the X-Image-* headers, X-Result-Cache, and the rate-limit headers.',
+    ),
+  };
+}
+
+function problemHeaders(codes: readonly ErrorCode[]): Record<string, Header> {
+  const window = String(WINDOW_MS / 1000);
+  return {
+    ...commonHeaders('no-store'),
+    ...(codes.includes('rate_limited') && {
+      'Retry-After': header('Seconds until the rate-limit window ends.', { type: 'integer' }),
+      RateLimit: header(
+        '"default";r=<remaining>;t=<seconds until reset>, per draft-ietf-httpapi-ratelimit-headers.',
+      ),
+      'RateLimit-Policy': header(
+        `"default";q=<requests per window>;w=${window}, per draft-ietf-httpapi-ratelimit-headers.`,
+      ),
+    }),
+    ...(codes.includes('method_not_allowed') && {
+      Allow: header('The methods this path accepts.'),
+    }),
+  };
+}
 
 // ProblemDetails narrowed to the codes a response can carry.
 function problemContent(codes: readonly ErrorCode[]) {
@@ -61,7 +116,11 @@ export function problemResponses(codes: readonly ErrorCode[]): RouteConfig['resp
       responses[status] = { $ref: `#/components/responses/${only}` };
     } else {
       const titles = sharing.map((code) => `${STATUS[code].title} (${code})`).join(' or ');
-      responses[status] = { description: `${titles}.`, content: problemContent(sharing) };
+      responses[status] = {
+        description: `${titles}.`,
+        headers: problemHeaders(sharing),
+        content: problemContent(sharing),
+      };
     }
   }
   return responses;
@@ -72,6 +131,7 @@ export function addOpenApiDocument(app: OpenAPIHono<AppEnv>, version: string): v
   for (const code of ERROR_CODES) {
     app.openAPIRegistry.registerComponent('responses', code, {
       description: `${STATUS[code].title}. See /docs#error-${code}.`,
+      headers: problemHeaders([code]),
       content: problemContent([code]),
     });
   }

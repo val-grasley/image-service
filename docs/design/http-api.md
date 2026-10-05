@@ -120,8 +120,8 @@ refinement carries its own, so the default hook only copies `issue.message` into
 one entry per parameter. The query schema's output types an omitted field as
 `T | undefined`, so `toSpec` accepts that shape as well as `ProcessParams` (decision 45).
 
-**`GET /info`.** Same `url` schema only, also strict. Calls `describeSource`, which fetches (through the
-source cache), sniffs, and inspects. Responds with JSON
+**`GET /info`.** Same `url` schema only, also strict. Calls `describeSource`, which fetches
+(through the source cache), sniffs, and inspects. Responds with JSON
 `{ url, finalUrl, format, width, height, bytes, pages }`, where `format` is the sniffed
 `SourceType`, and `Cache-Control: public, max-age=<SOURCE_CACHE_TTL_SECONDS>`.
 
@@ -177,6 +177,18 @@ where it can produce several, its response is one inline problem response whose 
 names each code (decision 46). Every problem response's schema is
 `allOf: [ProblemDetails, { properties: { code: { enum: [...] } } }]`, narrowed to the codes
 it can carry, so a client can read them from the schema rather than the prose.
+
+Every documented response lists the headers the service sets on it, each with a
+description. All of them carry `Cache-Control` (its value as a `const`), `X-Request-Id`,
+`Access-Control-Allow-Origin`, and `Access-Control-Expose-Headers`; `openapi.ts` supplies
+these, and its problem responses, component or inline, add `Retry-After`, `RateLimit`, and
+`RateLimit-Policy` where `rate_limited` is among their codes and `Allow` where
+`method_not_allowed` is. The `/process` 200 adds the image headers of section 7 and
+`Content-Length`, marked not required because a streamed delivery may arrive chunked; its
+304 adds `ETag`. `Content-Type` is documented by each response's content map, since
+OpenAPI 3.1 ignores a response header of that name. Headers added by the transport (the
+Node server, the function URL, CloudFront) are not the service's and are not listed.
+
 `/openapi.json` gets its `Cache-Control` from a middleware that sets it on a 200 only,
 because `doc31` registers its own handler. The sentence per code on `/docs` lives in
 `http/routes/docs.ts`. The Swagger UI component loads its script and stylesheet from the
@@ -191,9 +203,8 @@ deployment.
 - `process.test.ts`: the three example requests from the brief against the fake upstream;
   every response header in section 7 present with correct values; HEAD matches GET headers
   with an empty body; each validation failure returns 400 with the field named and a
-  sentence; an unknown parameter is refused naming it, without a fetch; `width * height` over
-the pixel cap is a `width` field error; a 304 round trip
-  using the returned `ETag`.
+  sentence; an unknown parameter is refused naming it, without a fetch; `width * height`
+  over the pixel cap is a `width` field error; a 304 round trip using the returned `ETag`.
 - `info.test.ts`: metadata for each format; the same errors as `/process` for bad URLs; any
   parameter other than `url` is refused naming it.
 - `errors.test.ts`: table of every `ErrorCode` through `toProblem` asserting status, title,
@@ -204,7 +215,9 @@ the pixel cap is a `width` field error; a 304 round trip
 - `cache-control.test.ts`: every route, including `/openapi.json`, `/docs`, an unknown
   path, and a wrong method, carries the `Cache-Control` value section 7 assigns it.
 - `routing.test.ts`: unknown path is 404 problem; `POST /process` is 405 with `Allow`;
-  `/health` shape and `no-store`; `/openapi.json` lists the three paths and every parameter;
+  `/health` shape and `no-store`; `/openapi.json` lists the three paths and every
+  parameter, and each documented response lists exactly the headers the service sends
+  with it;
   `/docs` contains an anchor for every error code.
 - `middleware.test.ts`: request-id accepted when valid, regenerated when not; the loop
   marker is refused; CORS headers present on 200, 304, and error responses.

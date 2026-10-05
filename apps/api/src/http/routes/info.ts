@@ -3,7 +3,7 @@ import type { Config } from '../../config.ts';
 import type { OperationDeps } from '../../operations/deps.ts';
 import { describeSource } from '../../operations/describe-source.ts';
 import type { AppEnv } from '../context.ts';
-import { problemResponses } from '../openapi.ts';
+import { commonHeaders, problemResponses } from '../openapi.ts';
 import { sourceUrlParam, strictQuery } from './process.ts';
 
 const sourceInfo = z
@@ -23,6 +23,7 @@ const sourceInfo = z
 export type InfoResponse = z.output<typeof sourceInfo>;
 
 export function addInfoRoute(app: OpenAPIHono<AppEnv>, config: Config, deps: OperationDeps): void {
+  const cacheControl = `public, max-age=${String(config.sourceCacheTtlSeconds)}`;
   const route = createRoute({
     method: 'get',
     path: '/info',
@@ -31,6 +32,7 @@ export function addInfoRoute(app: OpenAPIHono<AppEnv>, config: Config, deps: Ope
     responses: {
       200: {
         description: 'Metadata of the source image.',
+        headers: commonHeaders(cacheControl),
         content: { 'application/json': { schema: sourceInfo } },
       },
       ...problemResponses([
@@ -46,7 +48,6 @@ export function addInfoRoute(app: OpenAPIHono<AppEnv>, config: Config, deps: Ope
       ]),
     },
   });
-  const cacheControl = `public, max-age=${String(config.sourceCacheTtlSeconds)}`;
 
   app.openapi(route, async (c) => {
     const url = new URL(c.req.valid('query').url);

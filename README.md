@@ -128,9 +128,8 @@ Key trade-offs, each with a decision-log entry:
 
 Any other parameter is a 400 `invalid_parameter` naming it, so `?widht=5` fails instead of
 returning the image untransformed; `/info` takes only `url`. The dimension limits and default
-quality are configuration defaults. Inputs are JPEG, PNG,
-WebP, GIF, AVIF, and TIFF; animated inputs contribute their first frame; SVG is refused
-(decision 14).
+quality are configuration defaults. Inputs are JPEG, PNG, WebP, GIF, AVIF, and TIFF;
+animated inputs contribute their first frame; SVG is refused (decision 14).
 
 Image responses carry `Content-Type`, `ETag`, `Cache-Control: public, max-age=3600`,
 `X-Image-Width`, `X-Image-Height`, `X-Image-Format`, `X-Result-Cache` (`hit` or `miss`,
@@ -141,8 +140,9 @@ and exposes `ETag`, `X-Request-Id`, the `X-Image-*` headers, `X-Result-Cache`, a
 rate-limit headers. Upstream headers are never forwarded.
 
 Every error is `application/problem+json` with `Cache-Control: no-store` and a stable `code`
-from the SDK's union. Validation failures add `errors: [{ field, message }]`, one per rejected parameter; upstream
-failures add `upstreamStatus`. `type` is a relative reference into `/docs`.
+from the SDK's union. Validation failures add `errors: [{ field, message }]`, one per
+rejected parameter; upstream failures add `upstreamStatus`. `type` is a relative reference
+into `/docs`.
 
 ```json
 {
@@ -360,7 +360,7 @@ Open design questions found during implementation:
 - **Smaller items.** With `format` omitted, a PNG, TIFF, or GIF source still makes one
   in-process result-cache entry per `quality`, since the key is formed before the fetch; its
   ETag and conditional requests do not vary (decisions 58 and 60); a body truncated after a
-  valid header maps to 500 rather than a 4xx; the OpenAPI document omits response headers.
+  valid header maps to 500 rather than a 4xx.
 
 ## How this was built
 
