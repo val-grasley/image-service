@@ -62,15 +62,15 @@ response carries `Content-Type: application/problem+json`, `Cache-Control: no-st
 
 `type` is `/docs#error-<code>`. The body is the `ProblemDetails` type from the SDK.
 
-Validation failures from the route schema are turned into `ServiceError('invalid_parameter')`
-with `fields` built from the Zod issues: `field` is the parameter name, `message` is a
-sentence saying what is accepted (`must be an integer between 1 and 4096, written as digits
-without a sign or leading zeros`). Both query schemas are strict, so a parameter the route does not define fails validation: Zod reports
-every unknown key in one `unrecognized_keys` issue whose `keys` lists them, and the hook
-writes one entry per key, with the message set on the schema and built from its keys
-(`not accepted; use url, width, height, crop, format, quality`; decision 61). A repeated
-key reaches the schema as an array, so it fails as that parameter's own error, or once as
-unknown.
+Validation failures from the route schema are turned into
+`ServiceError('invalid_parameter')` with `fields` built from the Zod issues: `field` is the
+parameter name, `message` is a sentence saying what is accepted (`must be an integer between
+1 and 4096, written as digits without a sign or leading zeros`). Both query schemas are
+strict, so a parameter the route does not define fails validation: Zod reports every unknown
+key in one `unrecognized_keys` issue whose `keys` lists them, and the hook writes one entry
+per key, with the message set on the schema and built from its keys (`not accepted; use url,
+width, height, crop, format, quality`; decision 61). A repeated key reaches the schema as an
+array, so it fails as that parameter's own error, or once as unknown.
 
 ## Routes
 
