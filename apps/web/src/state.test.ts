@@ -75,7 +75,7 @@ function failedFor(url: URL): Event {
 }
 
 function stateIn(phase: Phase): State {
-  return { ...initialState, phase, copied: 'url' };
+  return { ...initialState, phase, copy: { what: 'url', outcome: 'copied' } };
 }
 
 describe('reduce', () => {
@@ -88,7 +88,7 @@ describe('reduce', () => {
         expect(next.phase).toBe(phase);
       });
 
-      it('starts loading the submitted request and clears the copied mark', () => {
+      it('starts loading the submitted request and clears the copy status', () => {
         const next = reduce(stateIn(phase), {
           type: 'submit',
           requestUrl: nextUrl,
@@ -97,20 +97,26 @@ describe('reduce', () => {
         expect(next).toEqual({
           ...initialState,
           phase: { kind: 'loading', requestUrl: nextUrl, controller: nextController },
-          copied: undefined,
+          copy: undefined,
         });
         // Every AbortController is structurally equal, so the controller is checked by identity.
         expect(next.phase.kind === 'loading' && next.phase.controller).toBe(nextController);
       });
 
-      it('sets the copied mark and clears it, keeping the phase object', () => {
-        const state = { ...stateIn(phase), copied: undefined };
+      it('sets the copied status and clears it, keeping the phase object', () => {
+        const state = { ...stateIn(phase), copy: undefined };
         const copied = reduce(state, { type: 'copied', what: 'curl' });
-        expect(copied).toEqual({ ...state, copied: 'curl' });
+        expect(copied).toEqual({ ...state, copy: { what: 'curl', outcome: 'copied' } });
         expect(copied.phase).toBe(phase);
         const cleared = reduce(copied, { type: 'copy-cleared' });
         expect(cleared).toEqual(state);
         expect(cleared.phase).toBe(phase);
+      });
+
+      it('sets the failed status in place of a copied one, keeping the phase object', () => {
+        const failed = reduce(stateIn(phase), { type: 'copy-failed', what: 'curl' });
+        expect(failed).toEqual({ ...stateIn(phase), copy: { what: 'curl', outcome: 'failed' } });
+        expect(failed.phase).toBe(phase);
       });
 
       if (phase.kind !== 'loading') {

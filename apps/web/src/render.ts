@@ -17,7 +17,9 @@ import type {
 
 export type Dispatch = (event: Event | { type: 'submit-requested' }) => void;
 
-const COPIED_MS = 2000;
+const COPY_STATUS_MS = 2000;
+
+const copyStatusText = { copied: 'Copied', failed: 'Copy failed; select the text instead' };
 
 // Built once: rebuilding the form or the copy buttons on every update would take the focus
 // away from the input being typed in or the button just pressed.
@@ -66,13 +68,24 @@ export function mount(root: HTMLElement, dispatch: Dispatch): (state: State) => 
     });
     const button = el('button', { type: 'button', 'aria-describedby': status.id }, `Copy ${label}`);
     button.addEventListener('click', () => {
-      void navigator.clipboard.writeText(text.textContent).then(() => {
-        clearTimeout(clearing);
-        dispatch({ type: 'copied', what });
-        clearing = setTimeout(() => {
-          dispatch({ type: 'copy-cleared' });
-        }, COPIED_MS);
-      });
+      // The Clipboard API exists only in a secure context, so the dev server reached over a
+      // LAN address has no navigator.clipboard, whatever its type says.
+      const written =
+        'clipboard' in navigator
+          ? navigator.clipboard.writeText(text.textContent)
+          : Promise.reject(new Error('The Clipboard API needs a secure context.'));
+      void written
+        .then(
+          (): Event => ({ type: 'copied', what }),
+          (): Event => ({ type: 'copy-failed', what }),
+        )
+        .then((event) => {
+          clearTimeout(clearing);
+          dispatch(event);
+          clearing = setTimeout(() => {
+            dispatch({ type: 'copy-cleared' });
+          }, COPY_STATUS_MS);
+        });
     });
     const row = el('div', { class: 'copy-row' }, [text, el('div', {}, [button, status])]);
     return { what, text, button, status, row };
@@ -110,7 +123,8 @@ export function mount(root: HTMLElement, dispatch: Dispatch): (state: State) => 
   let renderedPhase: Phase | undefined;
   return (state) => {
     for (const row of copyRows) {
-      row.status.textContent = state.copied === row.what ? 'Copied' : '';
+      row.status.textContent =
+        state.copy?.what === row.what ? copyStatusText[state.copy.outcome] : '';
     }
     // Typing and copying keep the phase object, so the regions derived from it, images
     // included, are rebuilt only when a request starts or settles.
@@ -178,13 +192,25 @@ function panels(phase: Phase): [original: Node[], processed: Node[]] {
 }
 
 function sourcePanel(requestUrl: URL, source: SourceInfo | SourceError): Node[] {
-  const sourceUrl = requestUrl.searchParams.get('url');
-  return [
-    ...(sourceUrl === null ? [] : [el('img', { src: sourceUrl, alt: 'Original image' })]),
-    ...('kind' in source
+  const details =
+    'kind' in source
       ? problemView(source.problem)
-      : [metadata(source.width, source.height, source.format, source.bytes)]),
-  ];
+      : [metadata(source.width, source.height, source.format, source.bytes)];
+  const sourceUrl = requestUrl.searchParams.get('url');
+  if (sourceUrl === null) return details;
+  const image = el('img', { src: sourceUrl, alt: 'Original image' });
+  // The browser loads the original from its own URL, which a hotlink rule, a mixed-content
+  // block, or a host the browser cannot reach may refuse although the service fetched it.
+  image.addEventListener('error', () => {
+    image.replaceWith(
+      el(
+        'p',
+        {},
+        'The browser could not load the original image directly; the details below come from the service.',
+      ),
+    );
+  });
+  return [image, ...details];
 }
 
 function metadata(width: number, height: number, format: string, size: number): HTMLElement {

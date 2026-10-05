@@ -18,7 +18,11 @@ type Phase =
   | { kind: 'success'; requestUrl: URL; source: SourceInfo | SourceError; processed: ProcessResult; objectUrl: string }
   | { kind: 'error'; requestUrl: URL; problem: ProblemDetails | TransportFailure };
 
-type State = { form: Form; phase: Phase; copied: 'url' | 'curl' | undefined };
+type State = {
+  form: Form;
+  phase: Phase;
+  copy: { what: 'url' | 'curl'; outcome: 'copied' | 'failed' } | undefined;
+};
 
 type Event =
   | { type: 'field'; name: keyof Form; value: string }
@@ -26,6 +30,7 @@ type Event =
   | { type: 'resolved'; requestUrl: URL; source: SourceInfo | SourceError; processed: ProcessResult; objectUrl: string }
   | { type: 'failed'; requestUrl: URL; problem: ProblemDetails | TransportFailure }
   | { type: 'copied'; what: 'url' | 'curl' }
+  | { type: 'copy-failed'; what: 'url' | 'curl' }
   | { type: 'copy-cleared' };
 
 function reduce(state: State, event: Event): State;   // pure
@@ -41,7 +46,7 @@ creates the object URL from the processed bytes and the `resolved` event carries
 `requestUrl` object. The comparison is by identity, not `href`: resubmitting the same
 parameters builds an equal URL, and the abort failure of the request it replaced must not
 settle it. A `field` event for `crop` or `format` whose value is not in the SDK's lists sets
-the blank. `submit` clears `copied`, since the indicator belonged to the previous URL. The
+the blank. `submit` clears `copy`, since the status belonged to the previous URL. The
 phase comparison is `effectsFor(before, after)` in `state.ts` beside `reduce`. Leaving a
 `loading` phase yields its controller to abort: on a resubmission that cancels the replaced
 request, on a failure it cancels the other call still in flight, and after a success the
@@ -62,16 +67,19 @@ abort does nothing. Leaving a `success` phase yields its object URL to revoke.
   once, attaching listeners that call `dispatch`, and returns the update function, which
   closes over the page's elements and the last phase it rendered. Elements are built with a
   small `el(tag, attrs, children)` helper in the same file; all text goes through
-  `textContent` or attribute setters. Each update sets the copied indicators, and only when
+  `textContent` or attribute setters. Each update sets the copy statuses, and only when
   the phase object changed rewrites the request URL and curl text, the field errors, and the
   panels. Typing and copying keep the phase object, so the input being typed in and the
   button just pressed keep focus and the images are not reloaded. The inputs start blank, as
   `initialState.form` is. `dispatch` takes an `Event` or `{ type: 'submit-requested' }`,
   which is what the form sends, since the `submit` event carries the URL and controller
   that `main.ts` creates (decision 48). A copy button writes the displayed text to the
-  clipboard, dispatches `copied`, and dispatches `copy-cleared` two seconds later through
-  one timer shared by both buttons, so a second copy keeps its indicator for the full two
-  seconds.
+  clipboard and dispatches `copied`, or `copy-failed` when `navigator.clipboard` is absent
+  (it exists only in a secure context, so not on the dev server reached over a LAN address)
+  or the write is refused; either way it dispatches `copy-cleared` two seconds later through
+  one timer shared by both buttons, so a second copy keeps its status for the full two
+  seconds. The original image's `error` listener, which replaces the image with a
+  paragraph, is the one listener that changes the page without dispatching (decision 69).
 - `main.ts`: creates the client from `location.origin`, mounts the page on `document.body`,
   holds the state and the update function `mount` returned, never element references, and
   runs the loop: `dispatch(event)` turns `submit-requested` into `submit`, reduces, performs
@@ -87,11 +95,17 @@ Three regions under a heading:
    option), format (select with blank "same as source"), quality. Submit on button or Enter.
    Field errors from a problem's `errors` appear beside the matching input.
 2. **Request.** The exact request URL from `processUrl` and the curl line from `curlFor`,
-   each with a copy button that shows "Copied" for two seconds. Shown from the first submit
+   each with a copy button that shows "Copied" for two seconds, or "Copy failed; select the
+   text instead" when the clipboard is unavailable or refuses the write. Shown from the first submit
    on, including in the error state.
 3. **Images.** Two panels, original and processed. Each shows the image, then dimensions,
    format, and size in a definition list. The original is an `img` pointing at the source
    URL, with metadata from `/info`; if `/info` failed, its problem is shown in the panel.
+   If the browser cannot load the original from its URL (a hotlink rule, a mixed-content
+   block on the https deployment, a host the browser cannot reach), the image's `error`
+   event replaces it with a paragraph saying the browser could not load the original
+   directly and that the details below come from the service; the metadata or problem
+   stays.
    The processed image is the object URL of the SDK's bytes, with metadata from the result
    and the size from `bytes.byteLength`. The processed panel shows a loading indicator
    during `loading` and the problem (`title`, `detail`, `code`, `requestId`) during `error`.
@@ -111,9 +125,10 @@ Every input has a `label`. The error and copied regions are `aria-live="polite"`
 processed panel's content, which holds the loading indicator and the problem, and one
 status beside each copy button. Each input names its field-error element in
 `aria-describedby` and sets `aria-invalid` while that element has text. Each copy button
-names its status in `aria-describedby`, so the button is described as "Copied" while the
-indicator shows (decision 49). The layout is a single column at 360 px and two columns for
-the panels above 800 px, in `styles.css`, no framework. Images use `max-width: 100%`.
+names its status in `aria-describedby`, so the button is described as "Copied" or the
+failure message while the status shows (decisions 49 and 69). The layout is a single column
+at 360 px and two columns for the panels above 800 px, in `styles.css`, no framework. Images
+use `max-width: 100%`.
 
 ## Build
 
@@ -140,4 +155,8 @@ a pure function `effectsFor(before, after)`, kept in `state.ts` so it imports wi
 page, returning the controller to abort and the URL to revoke. `api.ts`: `paramsFromForm`,
 and `run` against an `ImageClient` with an injected `fetch` for each outcome above. The DOM
 is covered by the end-to-end suite (`e2e/`), which exercises every state in the list above
-through the real API and the fake upstream.
+through the real API and the fake upstream. The two browser-side failures have no
+counterpart in the stack, so their specs change only the browser: the copy failure removes
+`navigator.clipboard` or makes `writeText` reject in an init script, and the original-image
+failure answers the page's own request for the source with a 403 through `page.route`,
+which the service's fetch never passes through.

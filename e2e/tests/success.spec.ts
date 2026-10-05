@@ -61,6 +61,30 @@ test('converts the processed image to the requested format', async ({ page }) =>
   ]);
 });
 
+test('says the browser could not load the original when its URL refuses the browser', async ({
+  page,
+}) => {
+  // A hotlink rule answers the browser, never the service, so only the page's own request
+  // to the source is refused.
+  await page.route(
+    (url) => url.href === source,
+    (route) => route.fulfill({ status: 403, body: 'Hotlinking is not allowed.' }),
+  );
+  await page.goto('/');
+  await page.getByLabel('Source URL').fill(source);
+  await page.getByRole('button', { name: 'Process' }).click();
+
+  const original = page.getByRole('region', { name: 'Original' });
+  await expect(original.getByRole('paragraph')).toHaveText(
+    'The browser could not load the original image directly; the details below come from the service.',
+  );
+  await expect(original.getByRole('img')).toHaveCount(0);
+  await expect(original.getByRole('definition')).toHaveText(['640 × 480', 'jpeg', /\d bytes$/]);
+  await expect(
+    page.getByRole('region', { name: 'Processed' }).getByRole('img', { name: 'Processed image' }),
+  ).toHaveJSProperty('naturalWidth', 640);
+});
+
 test.describe('with clipboard access', () => {
   test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
@@ -99,3 +123,36 @@ test.describe('with clipboard access', () => {
     await expect(copyCurl).toHaveAccessibleDescription('');
   });
 });
+
+const clipboardFailures: { name: string; init: () => void }[] = [
+  {
+    name: 'the Clipboard API is absent, as outside a secure context',
+    init: () => {
+      Reflect.deleteProperty(Navigator.prototype, 'clipboard');
+    },
+  },
+  {
+    name: 'the clipboard refuses the write',
+    init: () => {
+      Clipboard.prototype.writeText = () =>
+        Promise.reject(new DOMException('Write permission denied.', 'NotAllowedError'));
+    },
+  },
+];
+
+for (const c of clipboardFailures) {
+  test(`says the copy failed when ${c.name}`, async ({ page }) => {
+    await page.addInitScript(c.init);
+    await page.goto('/');
+    await page.getByLabel('Source URL').fill(source);
+    await page.getByRole('button', { name: 'Process' }).click();
+
+    const copyUrl = page.getByRole('button', { name: 'Copy request URL' });
+    const copyCurl = page.getByRole('button', { name: 'Copy curl command' });
+    await copyUrl.click();
+    await expect(copyUrl).toHaveAccessibleDescription('Copy failed; select the text instead');
+    await expect(copyCurl).toHaveAccessibleDescription('');
+
+    await expect(copyUrl).toHaveAccessibleDescription('');
+  });
+}

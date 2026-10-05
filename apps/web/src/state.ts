@@ -34,7 +34,11 @@ export type Phase =
 
 export type Copyable = 'url' | 'curl';
 
-export type State = { form: Form; phase: Phase; copied: Copyable | undefined };
+export type State = {
+  form: Form;
+  phase: Phase;
+  copy: { what: Copyable; outcome: 'copied' | 'failed' } | undefined;
+};
 
 export type Event =
   | { type: 'field'; name: keyof Form; value: string }
@@ -48,12 +52,13 @@ export type Event =
     }
   | { type: 'failed'; requestUrl: URL; problem: ProblemDetails | TransportFailure }
   | { type: 'copied'; what: Copyable }
+  | { type: 'copy-failed'; what: Copyable }
   | { type: 'copy-cleared' };
 
 export const initialState: State = {
   form: { url: '', width: '', height: '', crop: '', format: '', quality: '' },
   phase: { kind: 'idle' },
-  copied: undefined,
+  copy: undefined,
 };
 
 export function reduce(state: State, event: Event): State {
@@ -64,7 +69,7 @@ export function reduce(state: State, event: Event): State {
       return {
         ...state,
         phase: { kind: 'loading', requestUrl: event.requestUrl, controller: event.controller },
-        copied: undefined,
+        copy: undefined,
       };
     case 'resolved':
       if (!awaits(state.phase, event.requestUrl)) return state;
@@ -85,9 +90,11 @@ export function reduce(state: State, event: Event): State {
         phase: { kind: 'error', requestUrl: event.requestUrl, problem: event.problem },
       };
     case 'copied':
-      return { ...state, copied: event.what };
+      return { ...state, copy: { what: event.what, outcome: 'copied' } };
+    case 'copy-failed':
+      return { ...state, copy: { what: event.what, outcome: 'failed' } };
     case 'copy-cleared':
-      return { ...state, copied: undefined };
+      return { ...state, copy: undefined };
     default:
       return event satisfies never;
   }
