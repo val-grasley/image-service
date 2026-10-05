@@ -20,13 +20,18 @@ export function strictQuery<Shape extends z.core.$ZodLooseShape>(
   return z.strictObject(shape, { error: `not accepted; use ${Object.keys(shape).join(', ')}` });
 }
 
+// Only canonical digits become a number, so 05, 5.0, 0x5, 5e0, +5, and " 5" are refused rather
+// than each becoming another cache key for the same result (decision 63). Anything else stays
+// a string and fails the number check, which carries the message.
+const DECIMAL = /^(0|[1-9]\d*)$/;
+
 function integer(min: number, max: number) {
-  const error = `must be an integer between ${String(min)} and ${String(max)}`;
-  return z.coerce
-    .number({ error })
-    .int({ error })
-    .min(min, { error })
-    .max(max, { error })
+  const error = `must be an integer between ${String(min)} and ${String(max)}, written as digits without a sign or leading zeros`;
+  return z
+    .preprocess(
+      (value) => (typeof value === 'string' && DECIMAL.test(value) ? Number(value) : value),
+      z.number({ error }).int({ error }).min(min, { error }).max(max, { error }),
+    )
     .optional();
 }
 

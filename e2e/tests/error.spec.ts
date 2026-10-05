@@ -93,7 +93,9 @@ test('a validation error shows the problem and the field error beside its input'
   });
 
   const quality = page.getByLabel('Quality');
-  await expect(quality).toHaveAccessibleDescription('must be an integer between 1 and 100');
+  await expect(quality).toHaveAccessibleDescription(
+    'must be an integer between 1 and 100, written as digits without a sign or leading zeros',
+  );
   await expect(quality).toHaveAttribute('aria-invalid', 'true');
   await expect(page.getByLabel('Width')).toHaveAttribute('aria-invalid', 'false');
 });

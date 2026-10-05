@@ -1032,3 +1032,33 @@ restructuring beyond documenting headers.
 **Consequences:** A test compares, for each kind of response, the documented header set and
 its fixed values with the headers a real request receives, so a header added to or removed
 from a route without the document fails it.
+
+## 63. Integer parameters accept only plain decimal digits
+
+**Date:** 2026-10-04
+**Context:** `width`, `height`, and `quality` were `z.coerce.number().int()`, which runs
+`Number()` on the string, so `05`, `5.0`, `0x5`, `5e0`, `+5`, and ` 5` all read as 5. The
+CloudFront cache policy keys on the raw query string, so each spelling was another cache
+entry and origin request for one result, which undercut decision 61.
+**Decision:** Each integer parameter is `z.preprocess` into
+`z.number().int().min(min).max(max)`. The preprocess converts a string only when it
+matches `^(0|[1-9]\d*)$` and otherwise leaves it a string, which the number check refuses
+with the parameter's one message, now `must be an integer between <min> and <max>, written
+as digits without a sign or leading zeros`. The pattern admits `0`, although no parameter
+accepts it, so the spelling rule stays the canonical form of any non-negative integer and
+the range stays the only rule about values; `0` is refused by `min(1)` with the same
+message, so the two patterns behave identically here and this one needs no change if a
+range ever starts at 0.
+**Rejected:** `z.string().regex(...)` piped into the number schema: zod-to-openapi documents
+such a pipe by its input, so the parameters would appear as strings with a pattern, not
+integers with a range (`collectMetadata` follows a pipe's `in` unless it is a transform).
+`z.coerce.number()` with a refinement: the refinement sees the coerced number, not the
+spelling. A second message for a bad spelling: one sentence per parameter already says what
+is accepted.
+**Consequences:** The generated OpenAPI document is unchanged (byte-identical before and
+after). The message of every integer parameter changed, so the UI shows the longer sentence
+and the e2e expectation changed with it. The SDK is unaffected: `processUrl` writes
+integers with `String(n)`, which gives plain digits for every integer in range, and its
+fixed-order test pins `width=300&height=200&...&quality=70`. Other spellings that remain
+distinct cache keys, such as the parameter order and the percent-encoding of the source URL,
+are left to the listed next step, a CloudFront Function canonicalizing the query.

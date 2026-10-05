@@ -348,6 +348,11 @@ and extra parameters cannot mint cache keys (decision 61). `/info` accepts only 
 with an empty name (`&=5`, `&&`, a trailing `&`) is dropped by the query parser before
 validation, so it is not refused.
 
+Integer parameters are accepted only as plain decimal digits with no sign, leading zero,
+decimal point, exponent, or whitespace: `width=5`, not `05`, `5.0`, `0x5`, `5e0`, `+5`, or
+` 5`. Each of those would otherwise be another cache key for the same result. A refused
+spelling is the parameter's ordinary 400, whose message says what is accepted (decision 63).
+
 Animated inputs contribute their first frame. AVIF encoding uses a fixed low effort so encode
 time stays inside the transform budget.
 

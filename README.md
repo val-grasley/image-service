@@ -127,7 +127,8 @@ Key trade-offs, each with a decision-log entry:
 | `quality` | integer 1 to 100, lossy encoders only | 80 |
 
 Any other parameter is a 400 `invalid_parameter` naming it, so `?widht=5` fails instead of
-returning the image untransformed; `/info` takes only `url`. The dimension limits and default
+returning the image untransformed; `/info` takes only `url`. Integers are plain decimal
+digits: `width=5`, not `05`, `5.0`, `5e0`, `+5`, or `0x5`. The dimension limits and default
 quality are configuration defaults. Inputs are JPEG, PNG, WebP, GIF, AVIF, and TIFF;
 animated inputs contribute their first frame; SVG is refused (decision 14).
 

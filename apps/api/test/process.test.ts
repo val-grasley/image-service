@@ -141,8 +141,9 @@ describe('GET /process', () => {
 });
 
 describe('GET /process validation', () => {
-  const integer1To1024 = 'must be an integer between 1 and 1024';
-  const integer1To100 = 'must be an integer between 1 and 100';
+  const digits = 'written as digits without a sign or leading zeros';
+  const integer1To1024 = `must be an integer between 1 and 1024, ${digits}`;
+  const integer1To100 = `must be an integer between 1 and 100, ${digits}`;
   const absoluteUrl = 'must be an absolute URL';
   const unknownParameter = 'not accepted; use url, width, height, crop, format, quality';
   const cases: { name: string; params: Record<string, string>; field: string; message: string }[] =
@@ -214,6 +215,39 @@ describe('GET /process validation', () => {
         errors: [{ field: c.field, message: c.message }],
       });
     });
+  }
+
+  const integerParameters = [
+    { field: 'width', max: '1024', message: integer1To1024 },
+    { field: 'height', max: '1024', message: integer1To1024 },
+    { field: 'quality', max: '100', message: integer1To100 },
+  ];
+  // Number() parses each of these; the in-range ones would be second spellings of 5.
+  const nonCanonical = ['05', '00', '5.0', '0x5', '5e0', '+5', '-5', ' 5', '5 ', ''];
+
+  for (const { field, message } of integerParameters) {
+    for (const spelling of nonCanonical) {
+      it(`refuses ${field}=${JSON.stringify(spelling)} with the message saying what is accepted`, async () => {
+        const { request } = createHarness(fake);
+        const response = await request(
+          query('/process', { url: sourceUrl(fake, '/image/png'), [field]: spelling }),
+        );
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({ errors: [{ field, message }] });
+      });
+    }
+  }
+
+  for (const { field, max } of integerParameters) {
+    for (const value of ['1', '9', '10', max]) {
+      it(`accepts ${field}=${value}, a plain decimal within range`, async () => {
+        const { request } = createHarness(fake);
+        const response = await request(
+          query('/process', { url: sourceUrl(fake, '/image/png'), [field]: value }),
+        );
+        expect(response.status).toBe(200);
+      });
+    }
   }
 
   it('refuses a missing url with a field error naming url', async () => {

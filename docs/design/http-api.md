@@ -64,8 +64,8 @@ response carries `Content-Type: application/problem+json`, `Cache-Control: no-st
 
 Validation failures from the route schema are turned into `ServiceError('invalid_parameter')`
 with `fields` built from the Zod issues: `field` is the parameter name, `message` is a
-sentence saying what is accepted (`must be an integer between 1 and 4096`). Both query
-schemas are strict, so a parameter the route does not define fails validation: Zod reports
+sentence saying what is accepted (`must be an integer between 1 and 4096, written as digits
+without a sign or leading zeros`). Both query schemas are strict, so a parameter the route does not define fails validation: Zod reports
 every unknown key in one `unrecognized_keys` issue whose `keys` lists them, and the hook
 writes one entry per key, with the message set on the schema and built from its keys
 (`not accepted; use url, width, height, crop, format, quality`; decision 61). A repeated
@@ -81,10 +81,19 @@ Each route is a `createRoute` definition and a handler in its own file under `ht
 | Field | Schema |
 |---|---|
 | `url` | `z.url()`; stays a string in the schema's output so the type lock holds, and `toSpec` parses it |
-| `width`, `height` | `z.coerce.number().int().min(1).max(MAX_OUTPUT_DIMENSION).optional()` |
+| `width`, `height` | `integer(1, MAX_OUTPUT_DIMENSION)`: see below |
 | `crop` | `z.enum(['fit', 'fill', 'scale', 'pad']).optional()` |
 | `format` | `z.enum(['jpeg', 'png', 'webp', 'avif']).optional()` |
-| `quality` | `z.coerce.number().int().min(1).max(100).optional()` |
+| `quality` | `integer(1, 100)` |
+
+`integer(min, max)` is `z.preprocess` into `z.number().int().min(min).max(max)`, then
+`.optional()`. The preprocess turns a string into a number only when it matches
+`^(0|[1-9]\d*)$`, and leaves anything else a string for the number check to refuse, so
+`05`, `5.0`, `0x5`, `5e0`, `+5`, and ` 5` fail with the parameter's one message
+(`must be an integer between 1 and 1024, written as digits without a sign or leading
+zeros`) instead of each becoming a cache key for the same result (decision 63).
+zod-to-openapi documents a preprocess by its output schema, so the document still shows
+`type: integer` with the same `minimum` and `maximum`.
 
 A cross-field refinement rejects `width * height > MAX_OUTPUT_PIXELS` with a message on
 `width`. `MAX_*` come from config, so the schema is built by a function of config inside
