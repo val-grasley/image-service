@@ -1078,10 +1078,10 @@ effort keeps encode time inside the transform budget was therefore wrong at effo
 `MAX_AVIF_OUTPUT_PIXELS` (default 8,000,000), refuses an AVIF output whose computed
 dimensions exceed it with 422 `output_too_large`, before the input is opened. This corrects
 decision 27's effort and widens decision 23's `output_too_large`, which covered only the
-byte cap, to the AVIF pixel cap. The output
-dimensions come from `image/dimensions.ts`, a pure function that reproduces sharp's resize
-arithmetic from the oriented source dimensions and the spec, and is table-tested against
-sharp. `PIPELINE_REVISION` is bumped, since JPEG and AVIF output bytes change.
+byte cap, to the AVIF pixel cap. The output dimensions come from `image/dimensions.ts`, a
+pure function that reproduces sharp's resize arithmetic from the oriented source dimensions
+and the spec, and is table-tested against sharp. `PIPELINE_REVISION` is bumped, since JPEG
+and AVIF output bytes change.
 **Rejected:** No AVIF output: drops a format the contract offers. A longer Lambda timeout:
 moves the problem rather than bounding it, and a 16 MP AVIF at effort 2 would need about
 30 s. Capping AVIF through `MAX_OUTPUT_PIXELS`: punishes JPEG and WebP, whose 16 MP encodes
@@ -1139,15 +1139,15 @@ content the service cannot use. The key is the libvips error domain that starts 
 line: the loaders of five of the six accepted types (`VipsJpeg`, `vipspng`, `webp2vips`,
 `gifload_buffer`, `tiff2vips`) and libvips's input `source`, plus sharp's own first line
 `Warning treated as error due to failOn setting`. AVIF's loader domain, `heif`, is left out
-because it could not be shown to be the loader's alone (libheif's errors on the save path may
-carry it too) and it never appeared first; a damaged AVIF reports
-`source` first. A rejection is also mapped to 415 when the instance emitted a libvips
-warning before it, which covers the TIFF case; the timeout and the pixel limit are matched
-first, so they keep their codes whatever was warned, and a warning on a transform that
-succeeds changes nothing. Domains are fixed identifiers in libvips
-rather than prose, and the libjpeg and libpng texts after them vary too much to list. The
-pipeline tests provoke a real failure for every listed domain, so an upgrade that renames
-one fails the suite instead of falling back to 500 silently.
+because it could not be shown to be the loader's alone (libheif's errors on the save path
+may carry it too) and it never appeared first; a damaged AVIF reports `source` first. A
+rejection is also mapped to 415 when the instance emitted a libvips warning before it, which
+covers the TIFF case; the timeout and the pixel limit are matched first, so they keep their
+codes whatever was warned, and a warning on a transform that succeeds changes nothing.
+Domains are fixed identifiers in libvips rather than prose, and the libjpeg and libpng texts
+after them vary too much to list. The pipeline tests provoke a real failure for every listed
+domain, so an upgrade that renames one fails the suite instead of falling back to 500
+silently.
 **Rejected:** Matching the libjpeg and libpng texts: the probes found six different JPEG
 texts alone, and an unlisted one would stay 500. Mapping every unrecognized sharp error to
 415: hides genuine failures. Decoding the source a second time after a failure to decide
@@ -1158,9 +1158,8 @@ for an unsupported type.
 PNG loaders and savers, so a failure inside libjpeg or libpng while encoding would also read
 as 415; the probes found none on pixels that had decoded. A warning raised outside the
 loader before an unrelated failure would read as 415 too; every warning the probes saw came
-from a damaged source. `/info` reads only the header,
-so it still describes such a source with 200. The fake upstream gains
-`/truncated-pixels/:format` for the integration test.
+from a damaged source. `/info` reads only the header, so it still describes such a source
+with 200. The fake upstream gains `/truncated-pixels/:format` for the integration test.
 
 ## 67. `crop=scale` with one dimension derives the other from the aspect ratio
 

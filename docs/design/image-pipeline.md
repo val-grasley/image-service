@@ -55,8 +55,8 @@ arithmetic (`ResolveShrink` in sharp's `common.cc`, verified against sharp 0.35.
 - `fill`, `scale`, and `pad` with both dimensions: the requested dimensions.
 - Otherwise one uniform shrink factor, source over target: for `fit` the larger of the two
   factors and never below 1 (`withoutEnlargement`); for `fill`, `scale`, and `pad` with one
-  dimension, that dimension's factor. Each axis is the source axis divided by the factor, capped so no
-  axis drops below one pixel, rounded half up as libvips does.
+  dimension, that dimension's factor. Each axis is the source axis divided by the factor,
+  capped so no axis drops below one pixel, rounded half up as libvips does.
 
 JPEG and WebP sources decoded with shrink-on-load can differ from this arithmetic, usually by
 one pixel on the derived axis in either direction, more where an axis falls to a few pixels;
@@ -168,25 +168,25 @@ sharp's timeout surfaces as an `Error` whose message starts with the line
 `timeout: <n>% complete`, usually followed by libvips's own lines (observed with sharp
 0.35.5: `timeout: 43% complete\nVipsImage: killed for image "temp-97"`; decision 41);
 `fromSharpError` maps a message matching `/^timeout: \d+% complete(?:\n|$)/` to
-`transform_timeout`. sharp's input-too-large error (`Input image exceeds pixel limit`)
-maps to `source_too_large`. A source whose header `inspect` read but whose pixel data
-fails to decode, such as a truncated or corrupt file, maps to `unsupported_source_type`
-(decision 66). libvips starts each error message with the domain that raised it, so the
-match is on the first line starting with the domain of a loader for five of the six accepted
-types or of libvips's input source (AVIF's `heif` domain is left out, since it could not be
-shown to be the loader's alone; a damaged AVIF reports `source` first), observed with sharp 0.35.5 as `VipsJpeg: ` (for example
-`VipsJpeg: premature end of JPEG image`), `vipspng: ` (`vipspng: libpng read error`),
-`webp2vips: `, `gifload_buffer: `, `tiff2vips: `, and `source: ` (a truncated AVIF reports
-`source: bad seek to <n>` before libheif's own line), or on sharp's own first line
-`Warning treated as error due to failOn setting`, which sharp writes when `failOn`
-escalates a loader warning. An error whose first line comes from an encoder, such as
-`vips2png: unable to write to target target`, is not matched by the message. `transform`
-also listens for the sharp instance's `warning` event and passes `warned` to
-`fromSharpError`: a rejection after a libvips warning maps to `unsupported_source_type`,
-because a corrupt TIFF under png output fails with only the PNG saver's line while the
-escalated libtiff warning arrives as the event. The timeout and pixel-limit matches come
-first; a warning on a transform that succeeds is ignored. Anything else propagates as
-`internal_error` with the original as `cause`.
+`transform_timeout`. sharp's input-too-large error (`Input image exceeds pixel limit`) maps
+to `source_too_large`. A source whose header `inspect` read but whose pixel data fails to
+decode, such as a truncated or corrupt file, maps to `unsupported_source_type` (decision
+66). libvips starts each error message with the domain that raised it, so the match is on
+the first line starting with the domain of a loader for five of the six accepted types or of
+libvips's input source (AVIF's `heif` domain is left out, since it could not be shown to be
+the loader's alone; a damaged AVIF reports `source` first), observed with sharp 0.35.5 as
+`VipsJpeg: ` (for example `VipsJpeg: premature end of JPEG image`), `vipspng: `
+(`vipspng: libpng read error`), `webp2vips: `, `gifload_buffer: `, `tiff2vips: `, and
+`source: ` (a truncated AVIF reports `source: bad seek to <n>` before libheif's own line),
+or on sharp's own first line `Warning treated as error due to failOn setting`, which sharp
+writes when `failOn` escalates a loader warning. An error whose first line comes from an
+encoder, such as `vips2png: unable to write to target target`, is not matched by the
+message. `transform` also listens for the sharp instance's `warning` event and passes
+`warned` to `fromSharpError`: a rejection after a libvips warning maps to
+`unsupported_source_type`, because a corrupt TIFF under png output fails with only the PNG
+saver's line while the escalated libtiff warning arrives as the event. The timeout and
+pixel-limit matches come first; a warning on a transform that succeeds is ignored. Anything
+else propagates as `internal_error` with the original as `cause`.
 
 ## Tests
 
