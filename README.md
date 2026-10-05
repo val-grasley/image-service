@@ -216,7 +216,8 @@ for trusted hosts. Before any network activity the URL must be `http` or `https`
 canonicalizes forms like `0x7f.0.0.1` to `127.0.0.1` first. The fetcher then resolves each hop
 once and checks every address, and one blocked address denies the fetch. The blocked ranges are
 architecture section 5's table, which includes the cloud metadata address; IPv4-mapped,
-IPv4-compatible, NAT64, and 6to4 addresses are judged by the IPv4 address they embed. The
+IPv4-compatible, IPv4-translated, well-known NAT64, and 6to4 addresses are judged by the
+IPv4 address they embed, and local-use NAT64 and Teredo are blocked whole. The
 connection is made only to the checked addresses, through a custom `lookup` on the undici
 agent, while the hostname stays the TLS server name and `Host` header, so there is no DNS
 rebinding window. Redirects are followed manually, and every hop passes the rules again;
@@ -355,8 +356,6 @@ Open design questions found during implementation:
   black; flattening onto white before encoding is the likely fix.
 - **Unknown query parameters are ignored.** `?widht=5` returns 200 untransformed, and extra
   parameters let callers mint unlimited CloudFront cache keys; a 400 would tighten this.
-- **The IPv6 table could grow.** It could add SIIT (`::ffff:0:0:0/96`) and Teredo
-  (`2001::/32`) and block `64:ff9b:1::/48` outright.
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
 - **Smaller items.** A body truncated after a valid header maps to 500 rather than a 4xx;
   the OpenAPI document omits response headers.

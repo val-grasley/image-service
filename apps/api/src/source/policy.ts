@@ -29,12 +29,18 @@ const BLOCKED_IPV4: readonly (readonly [network: string, prefix: number])[] = [
   ['240.0.0.0', 4],
 ];
 
-// The IPv4-compatible, NAT64, and 6to4 prefixes are absent: they are blocked only when the
-// address they embed is, which embeddedIpv4 decides. IPv4-mapped addresses need no entry
-// because BlockList matches them against the IPv4 rules.
+// The IPv4-compatible, IPv4-translated, NAT64, and 6to4 prefixes are absent: they are blocked
+// only when the address they embed is, which embeddedIpv4 decides. IPv4-mapped addresses need
+// no entry because BlockList matches them against the IPv4 rules.
 const BLOCKED_IPV6: readonly (readonly [network: string, prefix: number])[] = [
   ['::', 128],
   ['::1', 128],
+  // Local-use NAT64 (RFC 8215): its operator may pick any RFC 6052 layout, so no single
+  // reading of the embedded address can be trusted (decision 59).
+  ['64:ff9b:1::', 48],
+  // Teredo (RFC 4380) carries a relay's IPv4 address and an obfuscated client one; it is
+  // blocked whole rather than decoded (decision 59).
+  ['2001::', 32],
   ['fc00::', 7],
   ['fe80::', 10],
   ['fec0::', 10],
@@ -47,33 +53,14 @@ const BLOCKED_RANGES = [
   ...BLOCKED_IPV6.map(([network, prefix]) => blockedRange(network, prefix, 'ipv6')),
 ];
 
-type Layout = readonly (readonly [start: bigint, bits: bigint])[];
-
-// Prefixes whose addresses carry an IPv4 address, which is checked against the IPv4 table:
-// IPv4-compatible, the two NAT64 prefixes, and 6to4. A layout lists the bit ranges, counted
-// from the most significant bit, that hold the IPv4 address. 64:ff9b:1::/48 is a local-use
-// NAT64 prefix (RFC 8215) whose operator may pick any RFC 6052 layout of /48 or longer, so
-// every such layout is checked, skipping the u octet at bits 64-71.
-const IPV4_EMBEDDINGS: readonly { prefix: string; length: bigint; layouts: Layout[] }[] = [
-  { prefix: '::', length: 96n, layouts: [[[96n, 32n]]] },
-  { prefix: '64:ff9b::', length: 96n, layouts: [[[96n, 32n]]] },
-  {
-    prefix: '64:ff9b:1::',
-    length: 48n,
-    layouts: [
-      [[96n, 32n]],
-      [[72n, 32n]],
-      [
-        [56n, 8n],
-        [72n, 24n],
-      ],
-      [
-        [48n, 16n],
-        [72n, 16n],
-      ],
-    ],
-  },
-  { prefix: '2002::', length: 16n, layouts: [[[16n, 32n]]] },
+// Prefixes whose addresses carry an IPv4 address in 32 bits starting at `start`, counted from
+// the most significant bit, which is checked against the IPv4 table: IPv4-compatible,
+// IPv4-translated (SIIT), the well-known NAT64 prefix, and 6to4.
+const IPV4_EMBEDDINGS: readonly { prefix: string; length: bigint; start: bigint }[] = [
+  { prefix: '::', length: 96n, start: 96n },
+  { prefix: '::ffff:0:0:0', length: 96n, start: 96n },
+  { prefix: '64:ff9b::', length: 96n, start: 96n },
+  { prefix: '2002::', length: 16n, start: 16n },
 ];
 
 const LOCAL_SUFFIXES = ['.local', '.internal', '.localhost'];
@@ -186,28 +173,24 @@ function matchedRange(address: string): { range: string; embedded?: string } | u
   if (family === 'ipv4') {
     return undefined;
   }
-  for (const embedded of embeddedIpv4(address)) {
-    const match = matchedRange(embedded);
-    if (match !== undefined) {
-      return { range: match.range, embedded };
-    }
+  const embedded = embeddedIpv4(address);
+  if (embedded === undefined) {
+    return undefined;
   }
-  return undefined;
+  const match = matchedRange(embedded);
+  return match === undefined ? undefined : { range: match.range, embedded };
 }
 
-function embeddedIpv4(address: string): string[] {
+function embeddedIpv4(address: string): string | undefined {
   const value = ipv6Value(address);
   const embedding = IPV4_EMBEDDINGS.find(
     ({ prefix, length }) => value >> (128n - length) === ipv6Value(prefix) >> (128n - length),
   );
-  return (embedding?.layouts ?? []).map((layout) => {
-    const embedded = layout.reduce(
-      (ipv4, [start, bits]) =>
-        (ipv4 << bits) | ((value >> (128n - start - bits)) & ((1n << bits) - 1n)),
-      0n,
-    );
-    return [24n, 16n, 8n, 0n].map((shift) => String((embedded >> shift) & 0xffn)).join('.');
-  });
+  if (embedding === undefined) {
+    return undefined;
+  }
+  const ipv4 = (value >> (96n - embedding.start)) & 0xffffffffn;
+  return [24n, 16n, 8n, 0n].map((shift) => String((ipv4 >> shift) & 0xffn)).join('.');
 }
 
 function ipv6Value(address: string): bigint {

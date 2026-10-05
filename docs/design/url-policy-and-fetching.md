@@ -55,14 +55,15 @@ ranges are added with `addSubnet(..., 'ipv4')` and IPv6 ranges with `addSubnet(.
 `check` is called with the address family as its second argument (`'ipv6'` for any IPv6
 literal); with the family omitted an IPv6 input is never matched. `BlockList` matches
 IPv4-mapped addresses (`::ffff:a.b.c.d`) against IPv4 rules when checked as `'ipv6'`, and
-matches addresses carrying a zone index (`fe80::1%eth0`). For the other three embedding
-prefixes (IPv4-compatible, NAT64, 6to4), `embeddedIpv4(address)` extracts the embedded
-address and it is checked against the IPv4 ranges in addition to the IPv6 check; the zone
-index is dropped before extraction. `64:ff9b:1::/48` is a local-use NAT64 prefix (RFC 8215)
-whose operator may use any RFC 6052 layout of /48 or longer, so the address is read at each
-of the /96, /64, /56, and /48 positions and one blocked reading denies. A consequence is that
-an address public in one layout but zero-filled in another is denied, which in practice
-blocks most of that prefix (decision 38).
+matches addresses carrying a zone index (`fe80::1%eth0`). For the other four embedding
+prefixes (IPv4-compatible `::/96`, IPv4-translated `::ffff:0:0:0/96`, NAT64 `64:ff9b::/96`,
+6to4 `2002::/16`), `embeddedIpv4(address)` extracts the 32-bit embedded address at its one
+fixed position (bits 96 to 127, or 16 to 47 for 6to4) and it is checked against the IPv4
+ranges in addition to the IPv6 check; the zone index is dropped before extraction.
+`64:ff9b:1::/48` is a local-use NAT64 prefix (RFC 8215) whose operator may use any RFC 6052
+layout of /48 or longer, so no one reading of its embedded address is authoritative; it is
+an IPv6 range in the table and blocked whole, as is Teredo `2001::/32` (decision 59, which
+supersedes the per-layout reading of decision 38).
 
 **Host normalization.** Node's `URL` lowercases hostnames and canonicalizes IPv4 shorthand,
 octal, hex, and decimal forms to dotted quads, and brackets IPv6 literals. The policy works on
@@ -198,10 +199,12 @@ expectation. Required rows, grouped:
 - **IPv4 literals:** one in each blocked range; `127.1`, `0177.0.0.1`, `0x7f.0.0.1`,
   `2130706433`, each asserting `hostname` canonicalized to `127.0.0.1` and denied.
 - **IPv6 literals:** `[::1]`, `[::]`, `[::ffff:127.0.0.1]`, `[::ffff:7f00:1]`,
-  `[::127.0.0.1]`, `[64:ff9b::7f00:1]`, `[64:ff9b:1::7f00:1]`, `[2002:7f00:1::]`,
-  `[fc00::1]`, `[fe80::1]`, `[fec0::1]`, `[ff02::1]`; and `[2606:4700::1111]` passes.
-  For `64:ff9b:1::/48`, one address private in exactly one of the /96, /64, /56, and /48
-  layouts per layout, and one public in all four, which passes.
+  `[::127.0.0.1]`, `[::ffff:0:127.0.0.1]`, `[64:ff9b::7f00:1]`, `[64:ff9b:1::7f00:1]`,
+  `[2002:7f00:1::]`, `[fc00::1]`, `[fe80::1]`, `[fec0::1]`, `[ff02::1]`; and
+  `[2606:4700::1111]` passes. An IPv4-translated address with a public embedded address
+  passes. `64:ff9b:1::/48` and `2001::/32` are denied as whole ranges, each with an address
+  that would be public by its embedded IPv4 reading, the top of the range, and a passing
+  address just outside it.
 - **Addresses:** a public name resolving to one address in each blocked range; one public
   plus one private address denies; a zone-indexed address in an embedding prefix is judged by
   its embedded address; each denial's `detail` names the range and not the address; a
