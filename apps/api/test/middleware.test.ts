@@ -136,14 +136,14 @@ describe('CORS', () => {
 
   for (const { name, headers } of [
     {
-      name: 'with its CORS request headers',
+      name: 'with its CORS request headers,',
       headers: {
         Origin: 'https://client.example',
         'Access-Control-Request-Method': 'GET',
         'Access-Control-Request-Headers': 'if-none-match',
       },
     },
-    { name: 'stripped of them, as CloudFront forwards it', headers: {} },
+    { name: 'stripped of its CORS request headers, as CloudFront forwards it,', headers: {} },
   ]) {
     it(`answers a preflight ${name} with 204, allowing both request headers the API reads`, async () => {
       const response = await createHarness(fake).request('/process', {
@@ -161,6 +161,14 @@ describe('CORS', () => {
     const refused = await request('/process');
     expect(preflightHeaders(preflight)).toEqual(PREFLIGHT_ANSWER);
     expect(refused.status).toBe(429);
+  });
+
+  it('sends a max-age of 0 when CORS_MAX_AGE_SECONDS is 0, so a browser does not reuse the answer', async () => {
+    const response = await createHarness(fake, { config: { corsMaxAgeSeconds: 0 } }).request(
+      '/process',
+      { method: 'OPTIONS' },
+    );
+    expect(preflightHeaders(response)).toEqual({ ...PREFLIGHT_ANSWER, maxAge: '0' });
   });
 });
 

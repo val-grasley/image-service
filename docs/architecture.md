@@ -474,7 +474,7 @@ JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
 | `RESULT_CACHE_MAX_BYTES` | 100 MB (100,000,000) | Per-instance LRU budget |
 | `SOURCE_CACHE_TTL_SECONDS` | 300 | Covers a user iterating on one image |
 | `SOURCE_CACHE_MAX_BYTES` | 50 MB (50,000,000) | |
-| `CORS_MAX_AGE_SECONDS` | 600 | `Access-Control-Max-Age` on a preflight. Without it Chromium keeps a preflight 5 s, so nearly every cross-origin conditional request costs two invocations of the reserved concurrency (decision 71) |
+| `CORS_MAX_AGE_SECONDS` | 600 | `Access-Control-Max-Age` on a preflight. Without it a browser keeps a preflight 5 s, so nearly every repeat cross-origin conditional request for the same URL costs two invocations of the reserved concurrency (decision 71) |
 | `RATE_LIMIT_PER_MINUTE` | 60 | Per client IP, counting requests that reach the origin; edge cache hits are not counted. IPv6 clients keyed on their /64 |
 | `RATE_LIMIT_BACKEND` | `memory` | `memory` or `dynamodb` |
 | `RATE_LIMIT_TABLE` | none | Required when backend is `dynamodb` |

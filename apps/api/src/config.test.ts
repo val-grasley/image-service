@@ -33,9 +33,12 @@ describe('parseConfig', () => {
   });
 
   it('coerces numeric strings', () => {
-    expect(parseConfig({ MAX_REDIRECTS: '0', PORT: '8080' })).toMatchObject({
+    expect(
+      parseConfig({ MAX_REDIRECTS: '0', PORT: '8080', CORS_MAX_AGE_SECONDS: '0' }),
+    ).toMatchObject({
       maxRedirects: 0,
       port: 8080,
+      corsMaxAgeSeconds: 0,
     });
   });
 

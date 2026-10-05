@@ -1315,21 +1315,25 @@ CloudFront's 403.
 
 **Date:** 2026-10-04
 **Context:** Decision 70 lets cross-origin clients send `If-None-Match` and `X-Request-Id`,
-which costs a preflight. Without `Access-Control-Max-Age` the Fetch standard has a browser
-keep a preflight answer for 5 seconds, which Chromium follows, so nearly every cross-origin
+which costs a preflight. Without `Access-Control-Max-Age` a browser keeps a preflight answer
+for 5 seconds (Fetch Standard, "CORS-preflight fetch"), so nearly every cross-origin
 conditional request costs two function invocations against the reserved concurrency of 10.
-When that is exhausted, Lambda's plain 429 answers the preflight without CORS headers, and
-the browser reports a CORS failure rather than a rate or capacity problem.
+The preflight cache is keyed per URL, so a max-age saves an invocation on repeat requests
+for the same URL, which is the conditional-request case. When the concurrency is exhausted,
+Lambda's plain 429 answers the preflight without CORS headers, and the browser reports a
+CORS failure rather than a rate or capacity problem.
 **Decision:** `CORS_MAX_AGE_SECONDS`, default 600, parsed in `config.ts` and passed to
 `hono/cors` as `maxAge`, which sets `Access-Control-Max-Age` on every preflight answer.
 Reusing the answer is safe for the reasons decision 70 gives for caching it: origin `*`, no
-credentials, and a fixed allow-list make it the same for every viewer. 600 is below the
-browsers' own caps (Chromium's is two hours), so it is honoured as set.
+credentials, and a fixed allow-list make it the same for every viewer. 600 is below
+Chromium's cap of 7200 seconds (MDN, `Access-Control-Max-Age`; taken from MDN only, not from
+Chromium's source), so it is honoured as set.
 **Rejected:** No max-age: the five-second default above. A longer value: a change to the
 allowed headers or methods would reach browsers that much later, for little further saving.
 Caching `OPTIONS` at the edge instead: each browser would still preflight every five
 seconds, and decision 70 keeps `OPTIONS` uncached.
-**Consequences:** A cross-origin client preflights a given URL at most once per ten minutes.
-A change to `allowHeaders` or `allowMethods` can take up to
-`CORS_MAX_AGE_SECONDS` to reach a browser that cached the old answer. A value of 0 sends
-`Access-Control-Max-Age: 0`, which disables reuse.
+**Consequences:** A cross-origin client typically preflights a given URL no more than once
+per ten minutes; a browser may evict the entry sooner, so this is not a bound. A change to
+`allowHeaders` or `allowMethods` can take up to `CORS_MAX_AGE_SECONDS` to reach a browser
+that cached the old answer. A value of 0 sends `Access-Control-Max-Age: 0`, which disables
+reuse.
