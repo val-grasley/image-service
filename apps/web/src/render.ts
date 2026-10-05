@@ -199,9 +199,10 @@ function sourcePanel(requestUrl: URL, source: SourceInfo | SourceError): Node[] 
   const sourceUrl = requestUrl.searchParams.get('url');
   if (sourceUrl === null) return details;
   const image = el('img', { src: sourceUrl, alt: 'Original image' });
-  // The browser loads the original from its own URL and decodes it itself, so a format it
-  // cannot display, such as TIFF, a hotlink rule, a mixed-content block, or a host only the
-  // service reaches fails here although the service fetched and read the source.
+  // The browser loads the original from its own URL and decodes it itself, so any of these
+  // fails here although the service fetched and read the source: a format it cannot
+  // display (TIFF, for one); a hotlink rule; a mixed-content block; a host only the service
+  // reaches.
   image.addEventListener('error', () => {
     image.replaceWith(
       el(

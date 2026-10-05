@@ -103,8 +103,8 @@ Three regions under a heading:
 3. **Images.** Two panels, original and processed. Each shows the image, then dimensions,
    format, and size in a definition list. The original is an `img` pointing at the source
    URL, with metadata from `/info`; if `/info` failed, its problem is shown in the panel.
-   If the browser cannot display the original (a format it cannot decode, such as TIFF, a
-   hotlink rule, a mixed-content block on the https deployment, a host only the service
+   If the browser cannot display the original (a format it cannot decode, TIFF for one; a
+   hotlink rule; a mixed-content block on the https deployment; a host only the service
    reaches), the image's `error` event replaces it with a paragraph saying the browser
    could not display the original image and that the details below come from the service;
    the metadata or problem stays.

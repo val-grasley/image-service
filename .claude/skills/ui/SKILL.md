@@ -16,9 +16,9 @@ test plan are `docs/design/ui.md`. The UI consumes the API only through
 - If a change wants a second render path, an element reference held outside `render.ts`,
   or a side effect inside `reduce`, the state shape is wrong; fix the state. Only
   `render.ts` creates or queries elements; `main.ts` holds nothing but the root it passes
-  in. Listeners that change application state go through `dispatch`; a listener that only
-  reports a browser-side failure on its own element may change the page directly
-  (decision 69).
+  in. Listeners that change application state go through `dispatch`. The one exception is
+  a listener for an element's own `error` event, which may replace or annotate that element
+  and neither reads nor writes `State` (decision 69).
 - The processed image is requested through the SDK client, never with an `img` element
   pointing at the API: that path fails silently and exposes no headers.
 - Every string from the API or the user enters the DOM through `textContent` or an
