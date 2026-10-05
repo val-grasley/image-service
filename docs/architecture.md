@@ -448,7 +448,7 @@ convention rather than their RFC 9110 meaning (decision 23).
 Behind CloudFront, only `GET`, `HEAD`, and `OPTIONS` reach the service; CloudFront answers
 other methods with its own 403, so `method_not_allowed` (405) is returned by the local
 server and by the function URL, not by the deployed distribution (decisions 56 and 70).
-`OPTIONS` is a CORS preflight, answered 204, never 405.
+`OPTIONS` on any path is answered as a CORS preflight with 204, never 404 or 405.
 
 ## 8. Limits and configuration
 

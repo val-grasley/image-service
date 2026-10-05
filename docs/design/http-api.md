@@ -241,4 +241,4 @@ deployment.
 - `middleware.test.ts`: request-id accepted when valid, regenerated when not; the loop
   marker is refused; CORS headers present on 200, 304, and error responses; a preflight is
   204 with the fixed allow-list, both with its CORS request headers and stripped of them as
-  CloudFront forwards it.
+  CloudFront forwards it, and is not rate limited.
