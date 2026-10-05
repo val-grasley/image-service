@@ -454,8 +454,10 @@ server and by the function URL, not by the deployed distribution (decisions 56 a
 ## 8. Limits and configuration
 
 Every limit is an environment variable parsed in `config.ts`. The README reproduces this
-table; when a default changes, both change. Supported input types are fixed, not configurable:
-JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
+table; when a default changes, both change. A numeric value is written as plain decimal
+digits, the spelling rule of section 7's integer parameters; anything else, an empty value
+included, fails at startup naming the variable (decision 72). Supported input types are
+fixed, not configurable: JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
 
 | Variable | Default | Reason |
 |---|---|---|

@@ -1337,3 +1337,31 @@ per ten minutes; a browser may evict the entry sooner, so this is not a bound. A
 `allowHeaders` or `allowMethods` can take up to `CORS_MAX_AGE_SECONDS` to reach a browser
 that cached the old answer. A value of 0 sends `Access-Control-Max-Age: 0`, which disables
 reuse.
+
+## 72. Integer settings accept only plain decimal digits
+
+**Date:** 2026-10-04
+**Context:** `config.ts` read its integer settings with `z.coerce.number()`, which runs
+`Number()` on the string. `Number('')` and `Number(' ')` are 0, so `MAX_REDIRECTS=`,
+`TRUSTED_PROXY_COUNT=`, and `CORS_MAX_AGE_SECONDS=` silently became 0, and a positive setting
+left empty failed with a range message that did not say the value was missing. `0x10`,
+`1e3`, `+5`, and `5.0` were all accepted as numbers. AGENTS.md requires `config.ts` to fail
+at startup on an invalid value, and a set-but-empty variable is one. Review of decision 71
+found it, since that entry added a third non-negative setting.
+**Decision:** Every integer setting, `DEFAULT_QUALITY` included, first matches
+`^(0|[1-9]\d*)$`, the spelling rule decision 63 gives the route's integer parameters, and is
+then piped into `z.coerce.number<string>().int()` with its range; the type argument makes
+the coercion's input `string`, which `pipe` requires of a string schema's successor. The
+default sits on the pipe, and zod 4's `ZodDefault` returns it for an absent variable without
+running the pipe (`zod/v4/core/schemas.js`), so unset variables keep their defaults while an
+empty one fails. The message is `must be written as decimal digits without a sign or leading
+zeros`, under the variable's name.
+**Rejected:** `/^\d+$/`: admits leading zeros, so the configuration would accept a spelling
+the API refuses, for no gain. `z.preprocess` as in decision 63: that choice was forced by
+zod-to-openapi documenting a pipe by its input, which does not apply to configuration, and
+the pipe gives a spelling error separate from the range error, which is clearer to an
+operator. Treating an empty value as unset: hides a deployment mistake that AGENTS.md says
+must fail.
+**Consequences:** A deployment that sets an integer variable to an empty or non-decimal value
+no longer starts. No checked-in environment does: the stack sets no integer variable, and
+the end-to-end configuration writes `String(n)` and the explicit ports of its URLs.

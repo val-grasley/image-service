@@ -1,8 +1,13 @@
 import { z } from 'zod';
 
-const positiveInt = (fallback: number) => z.coerce.number().int().positive().default(fallback);
+// Number() would read an empty value as 0 and accept hex and exponents (decision 72).
+const decimalDigits = z
+  .string()
+  .regex(/^(0|[1-9]\d*)$/, 'must be written as decimal digits without a sign or leading zeros');
+const positiveInt = (fallback: number) =>
+  decimalDigits.pipe(z.coerce.number<string>().int().positive()).default(fallback);
 const nonNegativeInt = (fallback: number) =>
-  z.coerce.number().int().nonnegative().default(fallback);
+  decimalDigits.pipe(z.coerce.number<string>().int()).default(fallback);
 
 const hostList = z
   .string()
@@ -36,7 +41,9 @@ const configSchema = z
     MAX_OUTPUT_PIXELS: positiveInt(16_000_000),
     MAX_AVIF_OUTPUT_PIXELS: positiveInt(8_000_000),
     MAX_OUTPUT_BYTES: positiveInt(10_000_000),
-    DEFAULT_QUALITY: z.coerce.number().int().min(1).max(100).default(80),
+    DEFAULT_QUALITY: decimalDigits
+      .pipe(z.coerce.number<string>().int().min(1).max(100))
+      .default(80),
     RESULT_CACHE_TTL_SECONDS: positiveInt(3600),
     RESULT_CACHE_MAX_BYTES: positiveInt(100_000_000),
     SOURCE_CACHE_TTL_SECONDS: positiveInt(300),

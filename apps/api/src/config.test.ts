@@ -32,13 +32,21 @@ describe('parseConfig', () => {
     });
   });
 
-  it('coerces numeric strings', () => {
+  it('reads plain decimal digits for each integer helper, including 0 where it is allowed', () => {
     expect(
-      parseConfig({ MAX_REDIRECTS: '0', PORT: '8080', CORS_MAX_AGE_SECONDS: '0' }),
+      parseConfig({
+        MAX_REDIRECTS: '0',
+        PORT: '8080',
+        CORS_MAX_AGE_SECONDS: '0',
+        TRUSTED_PROXY_COUNT: '10',
+        DEFAULT_QUALITY: '75',
+      }),
     ).toMatchObject({
       maxRedirects: 0,
       port: 8080,
       corsMaxAgeSeconds: 0,
+      trustedProxyCount: 10,
+      defaultQuality: 75,
     });
   });
 
@@ -54,6 +62,21 @@ describe('parseConfig', () => {
     }
     expect(caught).toBeInstanceOf(ConfigError);
     expect(caught).toHaveProperty('cause', expect.any(Error));
+  });
+
+  // One variable per integer helper: positive, non-negative, and DEFAULT_QUALITY's range.
+  for (const key of ['PORT', 'MAX_REDIRECTS', 'DEFAULT_QUALITY']) {
+    for (const value of ['', ' ', '0x10', '1e3', '-1', '+5', '05', '5.0']) {
+      it(`refuses ${key}=${JSON.stringify(value)} at startup, naming the variable`, () => {
+        expect(() => parseConfig({ [key]: value })).toThrow(
+          new RegExp(`^Invalid configuration:\n${key}: `),
+        );
+      });
+    }
+  }
+
+  it('refuses 0 for a positive integer setting', () => {
+    expect(() => parseConfig({ PORT: '0' })).toThrow(/^Invalid configuration:\nPORT: /);
   });
 
   it('requires RATE_LIMIT_TABLE when the backend is dynamodb', () => {

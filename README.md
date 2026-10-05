@@ -216,7 +216,9 @@ status, and CloudFront's own 403 for methods other than GET, HEAD, and OPTIONS.
 ## Limits and safeguards
 
 Every limit is an environment variable parsed in `apps/api/src/config.ts`. The variables and
-defaults are architecture section 8's, and the two change together.
+defaults are architecture section 8's, and the two change together. A numeric value is written
+as plain decimal digits; an empty, signed, hex, or exponent value stops the service at
+startup with a message naming the variable.
 
 | Variable | Default | Reason |
 |---|---|---|
