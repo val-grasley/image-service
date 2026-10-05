@@ -942,9 +942,9 @@ it carried. Nor were IPv6 benchmarking (`2001:2::/48`, RFC 5180 as corrected by 
 blocks its analogue `198.18.0.0/15`, and discard-only (`100::/64`, RFC 6666).
 **Decision:** `64:ff9b:1::/48`, `2001::/32`, `2001:2::/48`, and `100::/64` are IPv6 ranges
 in the blocked table, denied whole. `::ffff:0:0:0/96` joins the embedding prefixes and is
-judged by the IPv4 table, as IPv4-mapped addresses are. The per-layout reading is removed: every remaining embedding
-prefix carries its IPv4 address at one fixed position, so `embeddedIpv4` returns at most one
-address. This supersedes the `64:ff9b:1::/48` part of decision 38; its other two fixes (deny
+judged by the IPv4 table, as IPv4-mapped addresses are. The per-layout reading is removed:
+every remaining embedding prefix carries its IPv4 address at one fixed position, so
+`embeddedIpv4` returns at most one address. This supersedes the `64:ff9b:1::/48` part of decision 38; its other two fixes (deny
 a non-IP resolution, drop the zone index) stand. Approved by the author before
 implementation.
 **Rejected:** Keeping the per-layout reading for `64:ff9b:1::/48`: it fails open on the
