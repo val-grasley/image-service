@@ -162,7 +162,7 @@ into `/docs`.
 | URL blocked by policy, including a blocked redirect hop or the loop marker | 403 | `url_not_allowed` |
 | Source exceeds `MAX_SOURCE_BYTES` or `MAX_INPUT_PIXELS` | 413 | `source_too_large` |
 | Source is not a supported image type | 415 | `unsupported_source_type` |
-| Output exceeds `MAX_OUTPUT_BYTES` | 422 | `output_too_large` |
+| Output exceeds `MAX_OUTPUT_BYTES`, or an AVIF output would exceed `MAX_AVIF_OUTPUT_PIXELS` | 422 | `output_too_large` |
 | Rate limited | 429 | `rate_limited` |
 | Upstream returned non-2xx, was unreachable, or refused the connection | 502 | `upstream_error` |
 | Too many redirects | 502 | `too_many_redirects` |
@@ -191,6 +191,7 @@ defaults are architecture section 8's, and the two change together.
 | `TRANSFORM_TIMEOUT_SECONDS` | 5 | sharp's timeout takes whole seconds; bounds decode plus encode |
 | `MAX_OUTPUT_DIMENSION` | 4096 | Larger outputs are a CPU attack, not a thumbnail |
 | `MAX_OUTPUT_PIXELS` | 16,000,000 (16 MP) | Caps the product of both dimensions |
+| `MAX_AVIF_OUTPUT_PIXELS` | 8,000,000 (8 MP) | sharp's timeout cannot stop the AVIF encoder; 8 MP at effort 0 encodes in about 2 s, inside the transform budget |
 | `MAX_OUTPUT_BYTES` | 10,000,000 bytes | Keeps delivery inside the Lambda streaming budget; a 16 MP PNG can exceed 30 MB |
 | `DEFAULT_QUALITY` | 80 | Conventional lossy default |
 | `RESULT_CACHE_TTL_SECONDS` | 3600 | Also the `Cache-Control` max-age |
@@ -209,8 +210,10 @@ defaults are architecture section 8's, and the two change together.
 
 The Lambda has 1536 MB, a 20 s timeout, and reserved concurrency 10. The timeout covers the
 worst case of an 8 s fetch, a 5 s transform, and about 2 s to stream 10 MB, so an exceeded
-budget is a shaped 504 or 500 rather than a platform kill, except as noted under the encoder
-question in "Left out and next steps".
+budget is a shaped 504 or 500 rather than a platform kill. sharp's timeout does not interrupt
+the AVIF or mozjpeg encoders, so AVIF encodes at effort 0 under `MAX_AVIF_OUTPUT_PIXELS` and
+JPEG uses plain libjpeg; measured single-threaded on noise, 8 MP of AVIF takes about 2 s and
+16 MP of JPEG about 0.3 s (decision 64).
 
 **Fetch policy.** Every outbound request goes through `source/fetcher.ts`, with no exception
 for trusted hosts. Before any network activity the URL must be `http` or `https` on port 80 or
@@ -350,11 +353,6 @@ Next steps:
 
 Open design questions found during implementation:
 
-- **Encoders that escape the transform timeout.** sharp checks its timeout only during
-  libvips evaluation. Measured single-threaded on 16 MP of noise, AVIF at the configured
-  effort took about 18.5 s under a 5 s timeout and mozjpeg JPEG about 6.2 s under 1 s (WebP
-  stopped on time), so a worst-case AVIF request can exceed the Lambda timeout. Options: lower
-  AVIF effort with an AVIF pixel cap and plain libjpeg, no AVIF output, or a new budget.
 - **Transparent sources encoded as JPEG.** sharp drops alpha, so transparent pixels turn
   black; flattening onto white before encoding is the likely fix.
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.

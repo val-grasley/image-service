@@ -128,6 +128,7 @@ directory's statement.
 │   │   │   │   └── cache.ts      Short-TTL cache of fetched source bytes.
 │   │   │   ├── image/
 │   │   │   │   ├── spec.ts       TransformSpec: parsing, defaults, canonical form, cache key, output encoding.
+│   │   │   │   ├── dimensions.ts Pure. The output dimensions a spec produces from the oriented source dimensions.
 │   │   │   │   └── pipeline.ts   Sole importer of sharp. TransformSpec + bytes → bytes + metadata.
 │   │   │   ├── cache/            ByteLru (shared by both caches), ResultCache interface and memory implementation.
 │   │   │   ├── rate-limit/       RateLimiter interface, memory and DynamoDB implementations, client key derivation.
@@ -189,7 +190,9 @@ in AGENTS.md.
    validator this requires the source bytes, which step 7 has already fetched.
 10. **Transform.** `image/pipeline.ts` applies EXIF orientation, resizes per crop mode, strips
     metadata, encodes. Bounded by `TRANSFORM_TIMEOUT_SECONDS` via sharp's timeout, which
-    counts from when libvips opens the input. Output above `MAX_OUTPUT_BYTES` → 422.
+    counts from when libvips opens the input. An AVIF output whose computed dimensions exceed
+    `MAX_AVIF_OUTPUT_PIXELS` → 422 before the input is opened. Output above
+    `MAX_OUTPUT_BYTES` → 422.
 11. **Store and respond.** Store in the result cache. Respond with bytes and the headers in
     section 7.
 
@@ -353,8 +356,10 @@ decimal point, exponent, or whitespace: `width=5`, not `05`, `5.0`, `0x5`, `5e0`
 ` 5`. Each of those would otherwise be another cache key for the same result. A refused
 spelling is the parameter's ordinary 400, whose message says what is accepted (decision 63).
 
-Animated inputs contribute their first frame. AVIF encoding uses a fixed low effort so encode
-time stays inside the transform budget.
+Animated inputs contribute their first frame. sharp's timeout does not interrupt the AVIF
+encoder, so AVIF encodes at the lowest effort and an AVIF output above
+`MAX_AVIF_OUTPUT_PIXELS` is refused before decoding. JPEG uses plain libjpeg, since the
+mozjpeg encoder is not interrupted either.
 
 ### Response headers on image responses
 
@@ -420,7 +425,7 @@ unknown parameter's message lists the ones the endpoint accepts
 | URL blocked by policy, including a blocked redirect hop or the loop marker | 403 | `url_not_allowed` |
 | Source exceeds `MAX_SOURCE_BYTES` or `MAX_INPUT_PIXELS` | 413 | `source_too_large` |
 | Source is not a supported image type | 415 | `unsupported_source_type` |
-| Output exceeds `MAX_OUTPUT_BYTES` | 422 | `output_too_large` |
+| Output exceeds `MAX_OUTPUT_BYTES`, or an AVIF output would exceed `MAX_AVIF_OUTPUT_PIXELS` | 422 | `output_too_large` |
 | Rate limited | 429 | `rate_limited` |
 | Upstream returned non-2xx, was unreachable, or refused the connection | 502 | `upstream_error` |
 | Too many redirects | 502 | `too_many_redirects` |
@@ -453,6 +458,7 @@ JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
 | `TRANSFORM_TIMEOUT_SECONDS` | 5 | sharp's timeout takes whole seconds; bounds decode plus encode |
 | `MAX_OUTPUT_DIMENSION` | 4096 | Larger outputs are a CPU attack, not a thumbnail |
 | `MAX_OUTPUT_PIXELS` | 16 MP | Caps the product of both dimensions |
+| `MAX_AVIF_OUTPUT_PIXELS` | 8 MP (8,000,000) | sharp's timeout cannot stop the AVIF encoder; 8 MP at effort 0 encodes in about 2 s, inside the transform budget |
 | `MAX_OUTPUT_BYTES` | 10 MB (10,000,000) | Keeps delivery inside the Lambda streaming budget; a 16 MP PNG can exceed 30 MB |
 | `DEFAULT_QUALITY` | 80 | Conventional lossy default |
 | `RESULT_CACHE_TTL_SECONDS` | 3600 | Also the `Cache-Control` max-age |
@@ -479,6 +485,9 @@ reachable only through CloudFront (section 2). Production uses `cloudfront`.
 **Request budget.** Lambda timeout 20 s. Worst case inside it: fetch 8 s, transform 5 s,
 delivery of 10 MB at 6 MB unthrottled plus 2 MB/s for the rest, about 2 s. A request that
 exceeds its fetch or transform budget gets a shaped 504 or 500 rather than a platform kill.
+The transform budget holds for AVIF and JPEG through the encoder choices and the AVIF pixel
+cap above, not through sharp's timeout, which does not interrupt the AVIF or mozjpeg
+encoders (decision 64).
 Per-IP in-flight requests are not capped: one client can hold all reserved concurrency for the
 duration of its requests, bounded by the rate limit. This is accepted at this scale.
 

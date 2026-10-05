@@ -1062,3 +1062,33 @@ integers with `String(n)`, which gives plain digits for every integer in range, 
 fixed-order test pins `width=300&height=200&...&quality=70`. Other spellings that remain
 distinct cache keys, such as the parameter order and the percent-encoding of the source URL,
 are left to the listed next step, a CloudFront Function canonicalizing the query.
+
+## 64. AVIF at effort 0 under a pixel cap, and JPEG without mozjpeg
+
+**Date:** 2026-10-04
+**Context:** Decision 41 recorded that sharp's timeout, checked only during libvips
+evaluation, does not interrupt the AVIF encoder or mozjpeg's JPEG encoder: single-threaded on
+16 MP of noise, AVIF at effort 2 ran about 18.5 s under a 5 s timeout and mozjpeg about 6.2 s
+under 1 s, while WebP was interrupted on time. With the 8 s fetch budget an AVIF request could
+outlast the 20 s Lambda timeout and end as a platform kill instead of the shaped 500 of
+decision 22. AVIF at effort 0 measured about 5.3 s at 16 MP, 2.8 s at 8 MP, and 1.3 s at
+4 MP; plain libjpeg about 0.35 s at 16 MP.
+**Decision:** AVIF encodes with `effort: 0` and JPEG without `mozjpeg`. A new limit,
+`MAX_AVIF_OUTPUT_PIXELS` (default 8,000,000), refuses an AVIF output whose computed
+dimensions exceed it with 422 `output_too_large`, before the input is opened. The output
+dimensions come from `image/dimensions.ts`, a pure function that reproduces sharp's resize
+arithmetic from the oriented source dimensions and the spec, and is table-tested against
+sharp. `PIPELINE_REVISION` is bumped, since JPEG and AVIF output bytes change.
+**Rejected:** No AVIF output: drops a format the contract offers. A longer Lambda timeout:
+moves the problem rather than bounding it, and a 16 MP AVIF at effort 2 would need about
+30 s. Capping AVIF through `MAX_OUTPUT_PIXELS`: punishes JPEG and WebP, whose 16 MP encodes
+are fast. A separate error code for the AVIF cap: the caller's remedy is the same as for the
+byte cap, smaller dimensions or another format, so the existing code and status serve.
+**Consequences:** AVIF outputs are larger for the same quality than at effort 2, and JPEG
+outputs larger than mozjpeg's. An AVIF request above 8 MP of output is refused even when it
+would have finished in time on a fast machine. Re-measured after the change, single-threaded
+on noise from the fixture generator with sharp 0.35.5: AVIF at effort 0 took 4.7 to 4.9 s at
+16 MP (now refused by the cap in about 1 ms), 1.9 to 2.1 s at 8 MP, and about 1 s at 4 MP;
+plain libjpeg took 0.29 to 0.33 s at 16 MP. The 8 MP default leaves room for decode, resize,
+and a slower CPU share inside the 5 s budget; the measurements were not taken on Lambda, and
+a deployment with more CPU per request can raise the cap.

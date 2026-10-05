@@ -2,6 +2,7 @@ import type { CropMode, OutputFormat, SourceInfo, SourceType } from '@image-serv
 import sharp, { type ResizeOptions, type Sharp } from 'sharp';
 import type { Config } from '../config.ts';
 import { ServiceError } from '../errors.ts';
+import { outputDimensions } from './dimensions.ts';
 import { resolveEncoding, type Encoding, type TransformSpec } from './spec.ts';
 
 export type InspectResult = Pick<SourceInfo, 'format' | 'width' | 'height' | 'pages'>;
@@ -14,9 +15,12 @@ export type TransformResult = {
   height: number;
 };
 
-type PipelineLimits = Pick<Config, 'maxInputPixels' | 'transformTimeoutSeconds' | 'maxOutputBytes'>;
+type PipelineLimits = Pick<
+  Config,
+  'maxInputPixels' | 'transformTimeoutSeconds' | 'maxOutputBytes' | 'maxAvifOutputPixels'
+>;
 
-export const PIPELINE_REVISION = '1';
+export const PIPELINE_REVISION = '2';
 
 export function pipelineVersion(): string {
   return `${sharp.versions.sharp}/${PIPELINE_REVISION}`;
@@ -58,6 +62,17 @@ export async function transform(
 ): Promise<TransformResult> {
   const target = resolveEncoding(spec, info.format);
   const { format } = target;
+  if (format === 'avif') {
+    // sharp's timeout cannot interrupt the AVIF encoder, so its time is bounded by pixel count.
+    const { width, height } = outputDimensions(info, spec);
+    const pixels = width * height;
+    if (pixels > limits.maxAvifOutputPixels) {
+      throw new ServiceError(
+        'output_too_large',
+        `The AVIF output would be ${String(width)} by ${String(height)} (${String(pixels)} pixels); MAX_AVIF_OUTPUT_PIXELS allows at most ${String(limits.maxAvifOutputPixels)}; request smaller dimensions or another format.`,
+      );
+    }
+  }
   let image = sharp(bytes, { limitInputPixels: limits.maxInputPixels })
     .timeout({ seconds: limits.transformTimeoutSeconds })
     .autoOrient();
@@ -105,14 +120,15 @@ function resizeOptions(crop: CropMode, format: OutputFormat): ResizeOptions {
 function encode(image: Sharp, target: Encoding): Sharp {
   switch (target.format) {
     case 'jpeg':
-      return image.jpeg({ quality: target.quality, mozjpeg: true });
+      // mozjpeg's encoder is not interrupted by sharp's timeout; plain libjpeg is fast enough.
+      return image.jpeg({ quality: target.quality });
     case 'png':
       // Passing quality to the PNG encoder would switch it to palette quantization.
       return image.png();
     case 'webp':
       return image.webp({ quality: target.quality });
     case 'avif':
-      return image.avif({ quality: target.quality, effort: 2 });
+      return image.avif({ quality: target.quality, effort: 0 });
   }
 }
 

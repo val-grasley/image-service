@@ -234,6 +234,29 @@ describe('transform limits', () => {
     expect(jpeg.bytes.byteLength).toBeLessThanOrEqual(cap.maxOutputBytes);
   });
 
+  it('refuses an avif output above the AVIF pixel cap, naming the variable and the output size', async () => {
+    const cap = { maxAvifOutputPixels: 400 * 200 - 1 };
+    const refused = run(await quadrants(400, 200), { format: 'avif' }, cap);
+    await expect(refused).rejects.toMatchObject({ code: 'output_too_large' });
+    await expect(refused).rejects.toThrow(
+      /^The AVIF output would be 400 by 200 \(80000 pixels\); MAX_AVIF_OUTPUT_PIXELS allows at most 79999;/,
+    );
+  });
+
+  it('counts the AVIF cap on the output dimensions, not the source', async () => {
+    const cap = { maxAvifOutputPixels: 400 * 200 - 1 };
+    const result = await run(await quadrants(400, 200), { width: 200, format: 'avif' }, cap);
+    expect([result.format, result.width, result.height]).toEqual(['avif', 200, 100]);
+  });
+
+  it('applies the AVIF cap to a source kept as avif and to no other format', async () => {
+    const cap = { maxAvifOutputPixels: 400 * 200 - 1 };
+    const avif = await generateImage({ width: 400, height: 200, format: 'avif' });
+    await expect(run(avif, {}, cap)).rejects.toMatchObject({ code: 'output_too_large' });
+    const webp = await run(await quadrants(400, 200), { format: 'webp' }, cap);
+    expect([webp.width, webp.height]).toEqual([400, 200]);
+  });
+
   it('reads the dimensions of a source above the pixel limit, and refuses to transform it', async () => {
     const source = await quadrants(400, 200);
     const info = await inspect(source.bytes, source.format);

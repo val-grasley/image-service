@@ -12,6 +12,7 @@ describe('parseConfig', () => {
       transformTimeoutSeconds: 5,
       maxOutputDimension: 4096,
       maxOutputPixels: 16_000_000,
+      maxAvifOutputPixels: 8_000_000,
       maxOutputBytes: 10_000_000,
       defaultQuality: 80,
       resultCacheTtlSeconds: 3600,

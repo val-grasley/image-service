@@ -18,5 +18,8 @@ export type OperationDeps = {
     pipelineVersion: typeof pipelineVersion;
   };
   policy: PolicyConfig;
-  limits: Pick<Config, 'maxInputPixels' | 'maxOutputBytes' | 'transformTimeoutSeconds'>;
+  limits: Pick<
+    Config,
+    'maxInputPixels' | 'maxOutputBytes' | 'maxAvifOutputPixels' | 'transformTimeoutSeconds'
+  >;
 };

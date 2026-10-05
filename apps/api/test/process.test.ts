@@ -1,6 +1,7 @@
 import { startFakeUpstream } from '@image-service/fake-upstream/server';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { createHarness, query, sourceUrl, type FakeUpstream } from './harness.ts';
 
 let fake: FakeUpstream;
@@ -401,5 +402,20 @@ describe('GET /process validation', () => {
       requestId: 'unknown-parameter',
       errors: [{ field: 'widht', message: unknownParameter }],
     });
+  });
+});
+
+describe('GET /process output limits', () => {
+  it('refuses an avif output above MAX_AVIF_OUTPUT_PIXELS with 422 and accepts a smaller one', async () => {
+    const { request } = createHarness(fake, { config: { maxAvifOutputPixels: 100_000 } });
+    const url = sourceUrl(fake, '/image/png?w=640&h=480');
+    const refused = await request(query('/process', { url, format: 'avif' }));
+    expect(refused.status).toBe(422);
+    const problem = z.object({ code: z.string(), detail: z.string() }).parse(await refused.json());
+    expect(problem.code).toBe('output_too_large');
+    expect(problem.detail).toContain('MAX_AVIF_OUTPUT_PIXELS');
+    const accepted = await request(query('/process', { url, format: 'avif', width: '320' }));
+    expect(accepted.status).toBe(200);
+    expect(await decoded(accepted)).toEqual({ format: 'heif', width: 320, height: 240 });
   });
 });

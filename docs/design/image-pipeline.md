@@ -38,6 +38,31 @@ sniffed type (the mapping under "Output mapping") and returns the format with it
 or png with none; the pipeline encodes with it and the operation uses it to drop quality
 from the ETag of a `'source'` request that resolves to png (decision 60).
 
+## dimensions.ts
+
+```ts
+function outputDimensions(
+  source: { width: number; height: number },   // oriented, as inspect reports them
+  spec: Pick<TransformSpec, 'width' | 'height' | 'crop'>,
+): { width: number; height: number };
+```
+
+Pure. The dimensions `transform` will produce, computed before any pixel is decoded so the
+AVIF pixel cap can refuse a request without paying for it. It reproduces sharp's resize
+arithmetic (`ResolveShrink` in sharp's `common.cc`, verified against sharp 0.35.5):
+
+- No dimension: the source size.
+- `fill` and `pad` with both dimensions, and `scale` with either or both: the requested
+  dimensions, with an omitted one staying the source's (sharp's `fill` ignores the aspect
+  ratio, so it does not derive the other dimension).
+- Otherwise one uniform shrink factor, source over target: for `fit` the larger of the two
+  factors and never below 1 (`withoutEnlargement`); for `fill` and `pad` with one dimension,
+  that dimension's factor. Each axis is the source axis divided by the factor, capped so no
+  axis drops below one pixel, rounded half up as libvips does.
+
+A JPEG source decoded with shrink-on-load can come out a pixel off this arithmetic; the cap
+tolerates that.
+
 ## pipeline.ts
 
 ```ts
@@ -60,7 +85,7 @@ function fromSharpError(error: unknown): ServiceError; // exported so the mappin
 ```
 
 `PipelineLimits` is the slice of `Config` with `maxInputPixels`, `transformTimeoutSeconds`,
-and `maxOutputBytes`.
+`maxOutputBytes`, and `maxAvifOutputPixels`.
 
 **inspect** reads the header through sharp's `metadata()` without decoding pixels. It opens
 the input with `limitInputPixels: false`, because the limit is enforced when the input is
@@ -75,13 +100,19 @@ defaults to 1 when sharp omits it. A header sharp cannot parse throws
 
 **transform**, in this fixed order:
 
-1. `sharp(bytes, { limitInputPixels: maxInputPixels })` with `.timeout({ seconds })`.
+1. Resolve the output format. When it is avif, compute the output dimensions with
+   `outputDimensions(info, spec)` and throw `output_too_large` if their product exceeds
+   `maxAvifOutputPixels`, before the input is opened. The detail names
+   `MAX_AVIF_OUTPUT_PIXELS`, the computed dimensions and pixel count, and the limit. sharp's
+   timeout is checked only during libvips evaluation and does not interrupt the AVIF encoder,
+   so pixel count is what bounds its time (decision 64).
+2. `sharp(bytes, { limitInputPixels: maxInputPixels })` with `.timeout({ seconds })`.
    `transform` passes the limit itself so it is safe for any caller that skipped `inspect`.
-2. `.autoOrient()`: applies the EXIF orientation so later dimensions are the visual ones.
-3. Resize per the table below, only if `width` or `height` is set.
-4. Encode per the output table. Metadata is stripped because nothing calls
+3. `.autoOrient()`: applies the EXIF orientation so later dimensions are the visual ones.
+4. Resize per the table below, only if `width` or `height` is set.
+5. Encode per the output table. Metadata is stripped because nothing calls
    `withMetadata()`.
-5. Check the byte length against `maxOutputBytes`; throw `output_too_large`.
+6. Check the byte length against `maxOutputBytes`; throw `output_too_large`.
 
 ### Resize mapping
 
@@ -107,10 +138,10 @@ live here.
 
 | Output | Encoder options |
 |---|---|
-| jpeg | `{ quality, mozjpeg: true }` |
+| jpeg | `{ quality }`: plain libjpeg; `mozjpeg` is not set, because sharp's timeout does not interrupt it |
 | png | `{}` (quality is not passed; it would trigger palette quantization) |
 | webp | `{ quality }` |
-| avif | `{ quality, effort: 2 }` |
+| avif | `{ quality, effort: 0 }`: the lowest effort, because sharp's timeout does not interrupt the encoder |
 
 The format and quality come from `resolveEncoding(spec, info.format)`, so the PNG encoder
 is never handed a quality. `format: 'source'` resolves from `info.format`, the sniffed type:
@@ -135,6 +166,12 @@ as `cause`.
 
 ## Tests
 
+`dimensions.test.ts`: a table of source, spec, and expected dimensions covering every crop
+mode with both dimensions, with each one alone, and with none; `fit` never enlarging, with
+a box and with one dimension; rounding of a derived dimension, including an exact half; and
+the one-pixel floor. The same table runs through `transform` on generated sources, so a
+sharp upgrade that changes the arithmetic fails the test.
+
 `spec.test.ts`: defaults applied; `resolveEncoding` for an omitted format on png, tiff,
 gif, and jpeg sources and for an explicit format; quality dropped for `format: 'png'` and kept for every
 other format, including `'source'`; `cacheKey` is identical for two specs with equal fields,
@@ -157,6 +194,9 @@ change, and contains the href.
   quality can meet the PNG encoder, since a `format: 'png'` spec carries none.
 - A `noise` source whose png output exceeds a small `maxOutputBytes` throws
   `output_too_large`; the same with jpeg passes.
+- An avif output above a small `maxAvifOutputPixels` throws `output_too_large` with the
+  detail naming the variable and the computed size; the same source resized under the cap,
+  or encoded as webp, passes; a source kept as avif is capped too.
 - A source above a small `maxInputPixels` throws `source_too_large` from the operation's
   check after `inspect`; `transform` called directly on the same source, without that
   check, also throws `source_too_large` (mapped from sharp's pixel-limit error).
