@@ -1,3 +1,4 @@
+import type { ProcessParams } from '@image-service/sdk';
 import { describe, expect, it } from 'vitest';
 import { cacheKey, toSpec, type TransformSpec } from './spec.ts';
 
@@ -15,6 +16,50 @@ describe('toSpec', () => {
       quality: 80,
     });
   });
+
+  const url = new URL(href);
+  type Case = { name: string; params: ProcessParams; expect: TransformSpec };
+  const cases: Case[] = [
+    {
+      name: 'drops a given quality for png output',
+      params: { url: href, format: 'png', quality: 10 },
+      expect: { url, width: undefined, height: undefined, crop: 'fit', format: 'png' },
+    },
+    {
+      name: 'drops the default quality for png output',
+      params: { url: href, format: 'png' },
+      expect: { url, width: undefined, height: undefined, crop: 'fit', format: 'png' },
+    },
+    ...(['jpeg', 'webp', 'avif'] as const).map((format): Case => ({
+      name: `keeps a given quality for ${format} output`,
+      params: { url: href, format, quality: 10 },
+      expect: {
+        url,
+        width: undefined,
+        height: undefined,
+        crop: 'fit',
+        format,
+        quality: 10,
+      },
+    })),
+    {
+      name: 'keeps quality for the source format, which may resolve to a lossy one',
+      params: { url: href, quality: 10 },
+      expect: {
+        url,
+        width: undefined,
+        height: undefined,
+        crop: 'fit',
+        format: 'source',
+        quality: 10,
+      },
+    },
+  ];
+  for (const c of cases) {
+    it(c.name, () => {
+      expect(toSpec(c.params, defaults)).toStrictEqual(c.expect);
+    });
+  }
 
   it('keeps every parameter the caller gave', () => {
     expect(
@@ -45,17 +90,32 @@ describe('cacheKey', () => {
     expect(cacheKey(again)).toBe(cacheKey(base));
   });
 
-  const changes: { name: string; spec: TransformSpec }[] = [
-    { name: 'url', spec: { ...base, url: new URL('https://images.example/photos/dog.jpg') } },
-    { name: 'width', spec: { ...base, width: 301 } },
-    { name: 'height', spec: { ...base, height: 300 } },
-    { name: 'crop', spec: { ...base, crop: 'fill' } },
-    { name: 'format', spec: { ...base, format: 'png' } },
-    { name: 'quality', spec: { ...base, quality: 81 } },
+  const changes: { name: string; params: ProcessParams }[] = [
+    { name: 'url', params: { url: 'https://images.example/photos/dog.jpg', width: 300 } },
+    { name: 'width', params: { url: href, width: 301 } },
+    { name: 'height', params: { url: href, width: 300, height: 300 } },
+    { name: 'crop', params: { url: href, width: 300, crop: 'fill' } },
+    { name: 'format', params: { url: href, width: 300, format: 'png' } },
+    { name: 'quality', params: { url: href, width: 300, quality: 81 } },
   ];
   for (const change of changes) {
     it(`changes when only the ${change.name} changes`, () => {
-      expect(cacheKey(change.spec)).not.toBe(cacheKey(base));
+      expect(cacheKey(toSpec(change.params, defaults))).not.toBe(cacheKey(base));
+    });
+  }
+
+  it('gives png output no quality, so quality 10 and 90 share one key', () => {
+    const low = toSpec({ url: href, format: 'png', quality: 10 }, defaults);
+    const high = toSpec({ url: href, format: 'png', quality: 90 }, defaults);
+    expect(cacheKey(low)).toBe(`v1|url=${href}|w=-|h=-|crop=fit|format=png|q=-`);
+    expect(cacheKey(high)).toBe(cacheKey(low));
+  });
+
+  for (const format of ['jpeg', 'webp', 'avif', undefined] as const) {
+    it(`keeps quality in the key for ${format ?? 'source'} output`, () => {
+      const low = toSpec({ url: href, ...(format && { format }), quality: 10 }, defaults);
+      const high = toSpec({ url: href, ...(format && { format }), quality: 90 }, defaults);
+      expect(cacheKey(low)).not.toBe(cacheKey(high));
     });
   }
 });

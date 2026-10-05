@@ -1,13 +1,13 @@
 import type { CropMode, OutputFormat, ProcessParams } from '@image-service/sdk';
 
+// PNG is lossless, so a quality would only split the cache and the ETag over identical bytes.
+// `source` keeps its quality because the source may resolve to a lossy format.
 export type TransformSpec = {
   url: URL;
   width: number | undefined;
   height: number | undefined;
   crop: CropMode;
-  format: OutputFormat | 'source';
-  quality: number;
-};
+} & ({ format: 'png' } | { format: Exclude<OutputFormat, 'png'> | 'source'; quality: number });
 
 // Zod types an omitted optional field as `T | undefined`, which exactOptionalPropertyTypes keeps
 // apart from ProcessParams' absent key; toSpec treats the two alike.
@@ -18,14 +18,16 @@ type ValidatedParams = {
 };
 
 export function toSpec(params: ValidatedParams, defaults: { quality: number }): TransformSpec {
-  return {
+  const common = {
     url: new URL(params.url),
     width: params.width,
     height: params.height,
     crop: params.crop ?? 'fit',
-    format: params.format ?? 'source',
-    quality: params.quality ?? defaults.quality,
   };
+  const format = params.format ?? 'source';
+  return format === 'png'
+    ? { ...common, format }
+    : { ...common, format, quality: params.quality ?? defaults.quality };
 }
 
 export function cacheKey(spec: TransformSpec): string {
@@ -36,6 +38,6 @@ export function cacheKey(spec: TransformSpec): string {
     `h=${String(spec.height ?? '-')}`,
     `crop=${spec.crop}`,
     `format=${spec.format}`,
-    `q=${String(spec.quality)}`,
+    `q=${spec.format === 'png' ? '-' : String(spec.quality)}`,
   ].join('|');
 }

@@ -358,9 +358,8 @@ Open design questions found during implementation:
 - **The IPv6 table could grow.** It could add SIIT (`::ffff:0:0:0/96`) and Teredo
   (`2001::/32`) and block `64:ff9b:1::/48` outright.
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
-- **Smaller items.** A lossless output's cache key still varies with `quality`; a body
-  truncated after a valid header maps to 500 rather than a 4xx; the OpenAPI document omits
-  response headers.
+- **Smaller items.** A body truncated after a valid header maps to 500 rather than a 4xx;
+  the OpenAPI document omits response headers.
 
 ## How this was built
 

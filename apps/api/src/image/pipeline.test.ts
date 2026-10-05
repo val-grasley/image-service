@@ -200,20 +200,25 @@ describe('transform quality', () => {
     });
   }
 
-  it('ignores quality for png', async () => {
-    // A quality reaching the PNG encoder changes the bytes for resampled half-transparent
-    // noise; with fewer colors or no alpha the quantized palette can come out identical.
-    const source = await generateImage({
-      width: 128,
-      height: 128,
-      format: 'png',
-      pattern: 'noise',
-      alpha: true,
+  // The spec carries no quality for format=png, but does for format=source, so only the
+  // second case shows the encoder ignoring a quality it is given.
+  for (const format of ['png', undefined] as const) {
+    it(`ignores quality for png output ${format === undefined ? 'resolved from the source' : 'requested as png'}`, async () => {
+      // A quality reaching the PNG encoder changes the bytes for resampled half-transparent
+      // noise; with fewer colors or no alpha the quantized palette can come out identical.
+      const source = await generateImage({
+        width: 128,
+        height: 128,
+        format: 'png',
+        pattern: 'noise',
+        alpha: true,
+      });
+      const low = await run(source, { width: 64, ...(format && { format }), quality: 10 });
+      const high = await run(source, { width: 64, ...(format && { format }), quality: 90 });
+      expect(low.format).toBe('png');
+      expect(low.bytes).toEqual(high.bytes);
     });
-    const low = await run(source, { width: 64, format: 'png', quality: 10 });
-    const high = await run(source, { width: 64, format: 'png', quality: 90 });
-    expect(low.bytes).toEqual(high.bytes);
-  });
+  }
 });
 
 describe('transform limits', () => {

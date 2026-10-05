@@ -898,3 +898,27 @@ denial line: the design keeps resolved addresses at `debug`, and the denial line
 log what the debug line already does.
 **Consequences:** An operator finding which address was denied sets `LOG_LEVEL=debug` or
 reads the range from the detail. The policy table's expected details changed with this entry.
+
+## 58. A png spec carries no quality
+
+**Date:** 2026-10-04
+**Context:** `quality` is never passed to the PNG encoder, yet `toSpec` put it, given or
+defaulted, into every spec, and the cache key and the ETag include the spec. `quality=10`
+and `quality=90` on `format=png` therefore made two result-cache entries and two ETags for
+identical bytes.
+**Decision:** `TransformSpec` is a union on `format`: the `png` member has no `quality`, and
+every other member, `source` included, has one. `toSpec` drops quality for png, and the key
+writes `q=-` there, as it writes `-` for an absent dimension. The pipeline resolves the
+output format and quality together into one value, so the PNG encoder cannot be handed a
+quality by type. The SDK's `ProcessParams` is unchanged: it describes the request, not the
+normalized spec. The key keeps its `v1` prefix: no new key can equal an old key with a
+different meaning, and a bump would change the ETag of every non-png response too.
+Approved by the author before implementation.
+**Rejected:** Keeping `quality` in the spec and omitting it from the key only: the spec
+would still claim a quality that means nothing. `quality: number | undefined`: the pipeline
+would need a fallback for a lossy format with none, which cannot happen. Normalizing
+`format=source` too: the key is formed before the fetch, when the output format is unknown.
+**Consequences:** A `format=source` request on a png, TIFF, or GIF source still keys on
+quality. CloudFront's cache key is the raw query string, so the edge still keeps one entry
+per `quality` value; those entries are filled from the single in-process entry and share
+its ETag, which is unchanged behavior at the edge.

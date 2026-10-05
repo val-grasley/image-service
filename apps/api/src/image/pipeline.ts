@@ -66,14 +66,15 @@ export async function transform(
   spec: TransformSpec,
   limits: PipelineLimits,
 ): Promise<TransformResult> {
-  const format = spec.format === 'source' ? SOURCE_OUTPUT[info.format] : spec.format;
+  const target = encoding(spec, info);
+  const { format } = target;
   let image = sharp(bytes, { limitInputPixels: limits.maxInputPixels })
     .timeout({ seconds: limits.transformTimeoutSeconds })
     .autoOrient();
   if (spec.width !== undefined || spec.height !== undefined) {
     image = image.resize(spec.width, spec.height, resizeOptions(spec.crop, format));
   }
-  const output = await encode(image, format, spec.quality)
+  const output = await encode(image, target)
     .toBuffer({ resolveWithObject: true })
     .catch((error: unknown) => {
       throw fromSharpError(error);
@@ -111,17 +112,27 @@ function resizeOptions(crop: CropMode, format: OutputFormat): ResizeOptions {
   }
 }
 
-function encode(image: Sharp, format: OutputFormat, quality: number): Sharp {
-  switch (format) {
+type Encoding = { format: 'png' } | { format: Exclude<OutputFormat, 'png'>; quality: number };
+
+function encoding(spec: TransformSpec, info: InspectResult): Encoding {
+  if (spec.format === 'png') {
+    return { format: 'png' };
+  }
+  const format = spec.format === 'source' ? SOURCE_OUTPUT[info.format] : spec.format;
+  return format === 'png' ? { format } : { format, quality: spec.quality };
+}
+
+function encode(image: Sharp, target: Encoding): Sharp {
+  switch (target.format) {
     case 'jpeg':
-      return image.jpeg({ quality, mozjpeg: true });
+      return image.jpeg({ quality: target.quality, mozjpeg: true });
     case 'png':
       // Passing quality to the PNG encoder would switch it to palette quantization.
       return image.png();
     case 'webp':
-      return image.webp({ quality });
+      return image.webp({ quality: target.quality });
     case 'avif':
-      return image.avif({ quality, effort: 2 });
+      return image.avif({ quality: target.quality, effort: 2 });
   }
 }
 

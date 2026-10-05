@@ -15,9 +15,7 @@ type TransformSpec = {
   width: number | undefined;
   height: number | undefined;
   crop: CropMode;
-  format: OutputFormat | 'source';
-  quality: number;
-};
+} & ({ format: 'png' } | { format: Exclude<OutputFormat, 'png'> | 'source'; quality: number });
 
 function toSpec(params: ProcessParams, defaults: { quality: number }): TransformSpec;
 function cacheKey(spec: TransformSpec): string;   // format in design/caching.md
@@ -25,9 +23,12 @@ function cacheKey(spec: TransformSpec): string;   // format in design/caching.md
 
 `ProcessParams` is the SDK's validated parameter type; `toSpec` also accepts it with
 `| undefined` on each optional field, which is how the route's Zod schema types an omitted
-field (decision 45). `toSpec` applies defaults only:
-`crop` to `fit`, `quality` to `DEFAULT_QUALITY`, `format` to `'source'`. Range validation
-has already happened in the route. `cacheKey` is pure and total.
+field (decision 45). `toSpec` applies defaults:
+`crop` to `fit`, `quality` to `DEFAULT_QUALITY`, `format` to `'source'`. For `format: 'png'`
+it drops `quality`, given or defaulted, because the PNG encoder never receives one; the spec,
+the cache key, and the ETag therefore do not vary with it (decision 58). `'source'` keeps
+its quality, since it may resolve to a lossy format. Range validation has already happened
+in the route. `cacheKey` is pure and total.
 
 ## pipeline.ts
 
@@ -100,6 +101,8 @@ offered.
 | webp | `{ quality }` |
 | avif | `{ quality, effort: 2 }` |
 
+The quality comes from the spec; a spec with `format: 'png'` has none, and one with
+`format: 'source'` that resolves to png has one the encoder does not receive.
 `format: 'source'` resolves from `info.format`, the sniffed type: jpeg, png, webp, avif map
 to themselves; tiff maps to png; gif maps to png. GIF output is not offered because it would be a lossy
 re-quantization of the first frame with no benefit over png.
@@ -121,8 +124,10 @@ as `cause`.
 
 ## Tests
 
-`spec.test.ts`: defaults applied; `cacheKey` is identical for two specs with equal fields,
-distinct for each single field change, and contains the href.
+`spec.test.ts`: defaults applied; quality dropped for `format: 'png'` and kept for every
+other format, including `'source'`; `cacheKey` is identical for two specs with equal fields,
+and for two png specs differing only in quality, distinct for each other single field
+change, and contains the href.
 
 `pipeline.test.ts`, using `generateImage` from the fake upstream package:
 
@@ -136,7 +141,7 @@ distinct for each single field change, and contains the href.
 - Each output format round-trips through `inspect`; `format: 'source'` on tiff and gif
   yields png.
 - `quality` 10 versus 90 on jpeg produces fewer bytes; `quality` on png is ignored (two
-  outputs byte-identical).
+  outputs byte-identical), both for `format: 'png'` and for `'source'` on a png source.
 - A `noise` source whose png output exceeds a small `maxOutputBytes` throws
   `output_too_large`; the same with jpeg passes.
 - A source above a small `maxInputPixels` throws `source_too_large` from the operation's

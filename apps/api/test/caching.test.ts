@@ -171,6 +171,18 @@ describe('X-Result-Cache', () => {
     ]);
     expect(second.headers.get('etag')).toBe(first.headers.get('etag'));
   });
+
+  it('is a hit with the same ETag for a png request differing only in quality', async () => {
+    const harness = createHarness(fake);
+    const params = { url: sourceUrl(fake, '/image/jpeg'), width: '30', format: 'png' };
+    const low = await harness.request(query('/process', { ...params, quality: '10' }));
+    const high = await harness.request(query('/process', { ...params, quality: '90' }));
+    expect([low.headers.get('x-result-cache'), high.headers.get('x-result-cache')]).toEqual([
+      'miss',
+      'hit',
+    ]);
+    expect(high.headers.get('etag')).toBe(low.headers.get('etag'));
+  });
 });
 
 describe('URL rules before the caches', () => {

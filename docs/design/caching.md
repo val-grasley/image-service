@@ -55,11 +55,16 @@ The key is the canonical form of the transform spec plus the source URL, produce
 `image/spec.ts`:
 
 ```
-v1|url=<href as requested>|w=<n|->|h=<n|->|crop=<mode>|format=<fmt|source>|q=<n>
+v1|url=<href as requested>|w=<n|->|h=<n|->|crop=<mode>|format=<fmt|source>|q=<n|->
 ```
 
 Parameters appear in this fixed order with defaults applied, so equivalent requests share a
-key. The leading `v1` is bumped if the key format changes. `url` is the href as received,
+key. `q` is `-` for `format=png`: the spec carries no quality for lossless output, so
+requests differing only in `quality` share one key and one ETag (decision 58). It stays a
+number for `format=source`, because the key is formed before the source is fetched, when
+the output format is not yet known, so a source that resolves to png still keys on quality.
+CloudFront's cache key is the raw query string and still varies with `quality`; each such
+edge entry is filled from the one in-process entry. The leading `v1` is bumped if the key format changes. `url` is the href as received,
 not the redirect target, so two source URLs that redirect to the same place are two entries;
 this is correct because their upstream validators may differ.
 
@@ -143,6 +148,7 @@ exactly those of the GET.
   calling the fetcher (the fake's request log is empty); on a miss with an upstream
   validator, returns 304 after one fetch and without a transform (the pipeline dep records
   calls); a non-matching value returns 200.
-- `X-Result-Cache` is `miss` then `hit` for two identical requests on one app instance.
+- `X-Result-Cache` is `miss` then `hit` for two identical requests on one app instance,
+  and for two `format=png` requests differing only in `quality`, which share an ETag.
 - Error responses carry `no-store`; `/health` carries `no-store`; `/info` carries the
   source-cache max-age.
