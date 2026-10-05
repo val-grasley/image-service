@@ -35,8 +35,9 @@ curl -sS -o out3.webp "$L?url=$J&width=800&height=600&format=webp&crop=fill"    
 Built: the API with `crop=fit|fill|scale|pad` and `format=jpeg|png|webp|avif`, a UI, a
 typed SDK and an OpenAPI document (the two bonuses taken), an SSRF-safe fetch policy, limits
 on every resource, per-client rate limiting, edge and in-process caching, RFC 9457 errors,
-and a CDK deployment reproducible from the repository. Bonuses left out, with reasons in
-the decision log: video thumbnails, `format=auto`, CI, and metrics. There is no
+and a CDK deployment reproducible from the repository. Bonuses not taken (decision 17):
+video thumbnails (decision 16), `format=auto` (decision 24), CI, metrics, and extra
+transformations such as rotate and blur. There is no
 authentication: the service is an open proxy bounded by rate limits (decision 29). The full
 list is under "Left out and next steps".
 
