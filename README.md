@@ -310,7 +310,7 @@ already caps the damage. Per-IP in-flight requests are not capped.
 - **End-to-end tests** (`e2e/`) start the fake upstream, the API, and an API limited to two
   requests a minute, and drive the built UI in Chromium by role and label: empty, loading,
   success, format conversion, copying and a failed copy, an original the browser cannot
-  load, validation, blocked URL, non-image source, upstream errors, transport failure, and
+  display, validation, blocked URL, non-image source, upstream errors, transport failure, and
   429.
 
 `packages/fake-upstream` generates every test image with sharp at run time and serves

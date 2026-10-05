@@ -1223,7 +1223,7 @@ source's own size. Decision 27 sized the byte cap on outputs that stop at
 bounded by `MAX_OUTPUT_BYTES` alone, as before. The test configuration gains
 `MAX_AVIF_OUTPUT_PIXELS`, which it lacked.
 
-## 69. A failed copy and an original the browser cannot load are reported on the page
+## 69. A failed copy and an original the browser cannot display are reported on the page
 
 **Date:** 2026-10-04
 **Context:** A review against the brief's "nothing fails silently" found two silent failures
@@ -1231,30 +1231,45 @@ in the UI. A copy button called `navigator.clipboard.writeText` with no rejectio
 and `navigator.clipboard` exists only in a secure context, so on the dev server reached over
 a LAN address the click threw, and a refused write was an unhandled rejection; either way
 the page showed nothing. The original panel's `img` points at the source URL with no `error`
-handler, so a source the service fetched but the browser cannot load (a hotlink rule, an
-`http://` source on the https deployment, a host only the service reaches) showed a
-broken-image icon beside correct metadata. `design/ui.md` described neither case.
-**Decision:** The copy status is state. `copied: Copyable | undefined` becomes `copy: { what,
-outcome: 'copied' | 'failed' } | undefined`, a `copy-failed` event sets the failed outcome,
-and the button's status reads "Copy failed; select the text instead" until the same shared
-two-second timer clears it. The button checks `'clipboard' in navigator` before writing,
-since the DOM types declare the property always present. The original image's `error` event
-replaces the image with a paragraph, set through `textContent`, saying the browser could not
-load the original directly and that the details below come from the service; that listener
-changes the page without dispatching. The end-to-end suite covers both by changing only the
-browser: an init script removes `navigator.clipboard` or makes `writeText` reject, and
-`page.route` answers the page's own request for the source with 403.
-**Rejected:** The image failure as state: the event would have to be matched to its phase by
-request URL identity, as `resolved` is, and a new phase object would rebuild both panels,
-recreating the failing image and reloading the processed one. Nothing but that element reads
-the failure, and the next phase discards the element. A separate lifetime for the failure
-message, kept until the next copy or submit: a second clearing path for no gain, since a
-retry fails the same way and shows the message again. A unit test of `render.ts`: the web
-workspace has no DOM environment and the design leaves the DOM to the end-to-end suite;
-happy-dom or jsdom would be a new dev dependency for two listeners. A stack URL the browser
-cannot load: no fake-upstream route answers the browser differently from the service, and
-the suite runs over http, so there is no mixed-content block to provoke.
+handler, so a source the service fetched and read but the browser cannot display showed a
+broken-image icon beside correct metadata. The causes are a format the browser cannot
+decode, such as TIFF, which decision 14 accepts as input and Chromium does not display in
+an `img`, and which is the most common; a hotlink rule that refuses the browser; an
+`http://` source on the https deployment; and a host only the service reaches.
+`design/ui.md` described neither case.
+**Decision:** The copy status is state. `copied: Copyable | undefined` becomes `copy: {
+what, outcome: 'copied' | 'failed' } | undefined`, a `copy-failed` event sets the failed
+outcome, and the button's status reads "Copy failed; select the text instead" until the same
+shared two-second timer clears it. The button checks `'clipboard' in navigator` before
+writing, since the DOM types declare the property always present. The original image's
+`error` event replaces the image with a paragraph, set through `textContent`, reading "The
+browser could not display the original image; the details below come from the service." That
+listener changes the page without dispatching, an exception, approved by the author, to the
+`ui` skill's rule that a change wanting a second render path means the state shape is wrong
+and the state is to be fixed: the browser's failure to display the original is not
+application state, nothing but that element reads it, and the next phase discards the
+element. The end-to-end suite drives the image failure through the stack with a TIFF source,
+and the hotlink case by answering the page's own request for a JPEG source with 403 through
+`page.route`; it drives the copy failure by changing only the browser, with an init script
+that removes `navigator.clipboard` or makes `writeText` reject.
+**Rejected:** Recording the failure in the phase, through an event matched to the success
+phase by request URL identity as `resolved` is: the new phase object would rebuild the
+processed panel from the object URL, and `effectsFor`, which yields a `success` phase's
+object URL to revoke whenever the phase object changes, would revoke the URL the new
+success phase still shows, breaking the processed image; avoiding that means teaching
+`effectsFor` that a success-to-success transition keeps its URL, for a fact only the
+original panel uses. A field outside the phase, as `copy` is (`original: 'failed' |
+undefined`, set by an event matched to the success phase by request URL identity, cleared
+by `submit`, applied in the part of the update that runs on every call): it works, but the
+update closure would have to hold a reference to the current original image to replace it,
+and the state would carry a fact that only that one element reads and that the element's
+own `error` event already delivers. A separate lifetime for the failure message, kept until
+the next copy or submit: a second clearing path for no gain, since a retry fails the same
+way and shows the message again. A unit test of `render.ts`: the web workspace has no DOM
+environment and the design leaves the DOM to the end-to-end suite; happy-dom or jsdom would
+be a new dev dependency for two listeners.
 **Consequences:** `State.copy` replaces `State.copied`, and the state tests change with the
 shape. Decision 49's described states are now "Copied", the failure message, or nothing.
-`render.ts` has one listener that does not dispatch, on the image whose loading only the
-browser sees.
+`render.ts` has one listener that does not dispatch, on the image whose display only the
+browser sees. The `ui` skill now says that listeners that change application state go
+through `dispatch`, and points here for the exception.

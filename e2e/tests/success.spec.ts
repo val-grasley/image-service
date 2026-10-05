@@ -61,29 +61,48 @@ test('converts the processed image to the requested format', async ({ page }) =>
   ]);
 });
 
-test('says the browser could not load the original when its URL refuses the browser', async ({
-  page,
-}) => {
+const tiffSource = new URL('/image/tiff?w=640&h=480', upstream).href;
+
+const undisplayableOriginals: {
+  name: string;
+  url: string;
+  format: string;
+  refuseBrowser: boolean;
+}[] = [
+  {
+    name: 'is in a format the browser cannot decode',
+    url: tiffSource,
+    format: 'tiff',
+    refuseBrowser: false,
+  },
   // A hotlink rule answers the browser, never the service, so only the page's own request
   // to the source is refused.
-  await page.route(
-    (url) => url.href === source,
-    (route) => route.fulfill({ status: 403, body: 'Hotlinking is not allowed.' }),
-  );
-  await page.goto('/');
-  await page.getByLabel('Source URL').fill(source);
-  await page.getByRole('button', { name: 'Process' }).click();
+  { name: 'refuses the browser', url: source, format: 'jpeg', refuseBrowser: true },
+];
 
-  const original = page.getByRole('region', { name: 'Original' });
-  await expect(original.getByRole('paragraph')).toHaveText(
-    'The browser could not load the original image directly; the details below come from the service.',
-  );
-  await expect(original.getByRole('img')).toHaveCount(0);
-  await expect(original.getByRole('definition')).toHaveText(['640 × 480', 'jpeg', /\d bytes$/]);
-  await expect(
-    page.getByRole('region', { name: 'Processed' }).getByRole('img', { name: 'Processed image' }),
-  ).toHaveJSProperty('naturalWidth', 640);
-});
+for (const c of undisplayableOriginals) {
+  test(`says the browser could not display the original when it ${c.name}`, async ({ page }) => {
+    if (c.refuseBrowser) {
+      await page.route(
+        (url) => url.href === c.url,
+        (route) => route.fulfill({ status: 403, body: 'Hotlinking is not allowed.' }),
+      );
+    }
+    await page.goto('/');
+    await page.getByLabel('Source URL').fill(c.url);
+    await page.getByRole('button', { name: 'Process' }).click();
+
+    const original = page.getByRole('region', { name: 'Original' });
+    await expect(original.getByRole('paragraph')).toHaveText(
+      'The browser could not display the original image; the details below come from the service.',
+    );
+    await expect(original.getByRole('img')).toHaveCount(0);
+    await expect(original.getByRole('definition')).toHaveText(['640 × 480', c.format, /\d bytes$/]);
+    await expect(
+      page.getByRole('region', { name: 'Processed' }).getByRole('img', { name: 'Processed image' }),
+    ).toHaveJSProperty('naturalWidth', 640);
+  });
+}
 
 test.describe('with clipboard access', () => {
   test.use({ permissions: ['clipboard-read', 'clipboard-write'] });

@@ -64,7 +64,7 @@ export function mount(root: HTMLElement, dispatch: Dispatch): (state: State) => 
     const status = el('span', {
       id: `copy-${what}-status`,
       'aria-live': 'polite',
-      class: 'copied',
+      class: 'copy-status',
     });
     const button = el('button', { type: 'button', 'aria-describedby': status.id }, `Copy ${label}`);
     button.addEventListener('click', () => {
@@ -199,14 +199,15 @@ function sourcePanel(requestUrl: URL, source: SourceInfo | SourceError): Node[] 
   const sourceUrl = requestUrl.searchParams.get('url');
   if (sourceUrl === null) return details;
   const image = el('img', { src: sourceUrl, alt: 'Original image' });
-  // The browser loads the original from its own URL, which a hotlink rule, a mixed-content
-  // block, or a host the browser cannot reach may refuse although the service fetched it.
+  // The browser loads the original from its own URL and decodes it itself, so a format it
+  // cannot display, such as TIFF, a hotlink rule, a mixed-content block, or a host only the
+  // service reaches fails here although the service fetched and read the source.
   image.addEventListener('error', () => {
     image.replaceWith(
       el(
         'p',
         {},
-        'The browser could not load the original image directly; the details below come from the service.',
+        'The browser could not display the original image; the details below come from the service.',
       ),
     );
   });

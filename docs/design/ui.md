@@ -79,7 +79,9 @@ abort does nothing. Leaving a `success` phase yields its object URL to revoke.
   or the write is refused; either way it dispatches `copy-cleared` two seconds later through
   one timer shared by both buttons, so a second copy keeps its status for the full two
   seconds. The original image's `error` listener, which replaces the image with a
-  paragraph, is the one listener that changes the page without dispatching (decision 69).
+  paragraph, is the one listener that changes the page without dispatching: the browser's
+  failure to display the original is not application state, and decision 69 makes it the
+  exception to the rule that a second render path means the state shape is wrong.
 - `main.ts`: creates the client from `location.origin`, mounts the page on `document.body`,
   holds the state and the update function `mount` returned, never element references, and
   runs the loop: `dispatch(event)` turns `submit-requested` into `submit`, reduces, performs
@@ -95,17 +97,17 @@ Three regions under a heading:
    option), format (select with blank "same as source"), quality. Submit on button or Enter.
    Field errors from a problem's `errors` appear beside the matching input.
 2. **Request.** The exact request URL from `processUrl` and the curl line from `curlFor`,
-   each with a copy button that shows "Copied" for two seconds, or "Copy failed; select the
-   text instead" when the clipboard is unavailable or refuses the write. Shown from the first submit
-   on, including in the error state.
+   each with a copy button that shows "Copied" for two seconds, or "Copy failed; select
+   the text instead" when the clipboard is unavailable or refuses the write. Shown from the
+   first submit on, including in the error state.
 3. **Images.** Two panels, original and processed. Each shows the image, then dimensions,
    format, and size in a definition list. The original is an `img` pointing at the source
    URL, with metadata from `/info`; if `/info` failed, its problem is shown in the panel.
-   If the browser cannot load the original from its URL (a hotlink rule, a mixed-content
-   block on the https deployment, a host the browser cannot reach), the image's `error`
-   event replaces it with a paragraph saying the browser could not load the original
-   directly and that the details below come from the service; the metadata or problem
-   stays.
+   If the browser cannot display the original (a format it cannot decode, such as TIFF, a
+   hotlink rule, a mixed-content block on the https deployment, a host only the service
+   reaches), the image's `error` event replaces it with a paragraph saying the browser
+   could not display the original image and that the details below come from the service;
+   the metadata or problem stays.
    The processed image is the object URL of the SDK's bytes, with metadata from the result
    and the size from `bytes.byteLength`. The processed panel shows a loading indicator
    during `loading` and the problem (`title`, `detail`, `code`, `requestId`) during `error`.
@@ -121,8 +123,8 @@ cache-busting parameter, so the displayed URL stays the one `processUrl` builds 
 
 ## Accessibility and layout
 
-Every input has a `label`. The error and copied regions are `aria-live="polite"`: the
-processed panel's content, which holds the loading indicator and the problem, and one
+Every input has a `label`. The error and copy status regions are `aria-live="polite"`:
+the processed panel's content, which holds the loading indicator and the problem, and one
 status beside each copy button. Each input names its field-error element in
 `aria-describedby` and sets `aria-invalid` while that element has text. Each copy button
 names its status in `aria-describedby`, so the button is described as "Copied" or the
@@ -155,8 +157,9 @@ a pure function `effectsFor(before, after)`, kept in `state.ts` so it imports wi
 page, returning the controller to abort and the URL to revoke. `api.ts`: `paramsFromForm`,
 and `run` against an `ImageClient` with an injected `fetch` for each outcome above. The DOM
 is covered by the end-to-end suite (`e2e/`), which exercises every state in the list above
-through the real API and the fake upstream. The two browser-side failures have no
-counterpart in the stack, so their specs change only the browser: the copy failure removes
-`navigator.clipboard` or makes `writeText` reject in an init script, and the original-image
-failure answers the page's own request for the source with a 403 through `page.route`,
-which the service's fetch never passes through.
+through the real API and the fake upstream. The original the browser cannot display is
+driven through the stack with a TIFF source, which the service reads and Chromium cannot
+decode, and, for the hotlink case, by answering the page's own request for a JPEG source
+with a 403 through `page.route`, which the service's fetch never passes through. The copy
+failure has no counterpart in the stack, so its specs change only the browser: an init
+script removes `navigator.clipboard` or makes `writeText` reject.
