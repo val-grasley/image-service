@@ -1,7 +1,30 @@
 # Image service
 
 **Live:** [https://d244qv5g3kagmy.cloudfront.net](https://d244qv5g3kagmy.cloudfront.net)
-(the UI at `/`, API docs at `/docs`), deployed from this repository to us-east-2.
+(the UI at `/`, API docs at `/docs`), deployed from this repository to us-east-2 and kept
+running for at least seven days from submission.
+
+## At a glance
+
+`GET /process` fetches an image from a public URL, resizes it, converts its format, and
+returns it; `GET /info` describes a source without transforming it. The brief's three
+example requests, against the live service with public images:
+
+```sh
+L=https://d244qv5g3kagmy.cloudfront.net/process
+J=https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg
+P=https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png
+curl -sS -o out1.jpg  "$L?url=$J&width=500&height=300"                            # 314×300, aspect kept
+curl -sS -o out2.jpg  "$L?url=$P&format=jpeg&quality=80"                          # transparency flattened on white
+curl -sS -o out3.webp "$L?url=$J&width=800&height=600&format=webp&crop=fill"      # exactly 800×600
+```
+
+Built: the API with `crop=fit|fill|scale|pad` and `format=jpeg|png|webp|avif`, a UI, a
+typed SDK and an OpenAPI document (the two bonuses taken), an SSRF-safe fetch policy, limits
+on every resource, per-client rate limiting, edge and in-process caching, RFC 9457 errors,
+and a one-command CDK deployment. Left out, with reasons in the decision log: video
+thumbnails, `format=auto`, CI, and metrics. Details follow; the rest of this README is the
+long form.
 
 An HTTP service that fetches an image from a caller-supplied URL, resizes and re-encodes it,
 and returns the result, with a single-page UI that calls the API through a dependency-free
