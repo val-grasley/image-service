@@ -160,7 +160,15 @@ describe('/openapi.json', () => {
 });
 
 const documentedHeaders = z.object({
-  headers: z.record(z.string(), z.object({ description: z.string().min(1) })).default({}),
+  headers: z
+    .record(
+      z.string(),
+      z.object({
+        description: z.string().min(1),
+        schema: z.object({ const: z.string().optional(), enum: z.array(z.string()).optional() }),
+      }),
+    )
+    .default({}),
 });
 const headersDocument = z.object({
   paths: z.record(
@@ -179,7 +187,7 @@ const headersDocument = z.object({
 type HeadersDocument = z.output<typeof headersDocument>;
 type Documented = { path: string; status: string } | { component: string };
 
-function headersDocumented(doc: HeadersDocument, where: Documented): string[] {
+function documentedHeaderObjects(doc: HeadersDocument, where: Documented) {
   const entry =
     'component' in where
       ? doc.components.responses[where.component]
@@ -188,7 +196,11 @@ function headersDocumented(doc: HeadersDocument, where: Documented): string[] {
     entry !== undefined && '$ref' in entry
       ? doc.components.responses[entry.$ref.replace('#/components/responses/', '')]
       : entry;
-  return Object.keys(resolved?.headers ?? {})
+  return resolved?.headers ?? {};
+}
+
+function headersDocumented(doc: HeadersDocument, where: Documented): string[] {
+  return Object.keys(documentedHeaderObjects(doc, where))
     .map((name) => name.toLowerCase())
     .sort();
 }
@@ -309,10 +321,21 @@ describe('/openapi.json response headers', () => {
   ];
 
   for (const c of cases) {
-    it(`documents exactly the headers sent with ${c.name}`, async () => {
-      const documented = headersDocumented(await document(), c.where);
+    it(`documents exactly the headers sent with ${c.name}, and the values it fixes`, async () => {
+      const doc = await document();
+      const documented = headersDocumented(doc, c.where);
       expect(documented).toEqual([...c.expected].sort());
-      expect(headersSent(await c.send())).toEqual(documented);
+      const response = await c.send();
+      expect(headersSent(response)).toEqual(documented);
+      for (const [name, { schema }] of Object.entries(documentedHeaderObjects(doc, c.where))) {
+        const value = response.headers.get(name);
+        if (schema.const !== undefined) {
+          expect(value, name).toBe(schema.const);
+        }
+        if (schema.enum !== undefined) {
+          expect(schema.enum, name).toContain(value);
+        }
+      }
     });
   }
 

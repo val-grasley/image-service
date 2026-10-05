@@ -93,11 +93,13 @@ export function addProcessRoute(
         headers: {
           ...commonHeaders(cacheControl),
           ETag: ETAG,
-          'Content-Length': header(
-            'Size of the image in bytes. A streamed response may arrive chunked without it, so measure the body.',
-            { type: 'integer' },
-            false,
-          ),
+          'Content-Length': {
+            ...header(
+              'Size of the image in bytes. A streamed response may arrive chunked without it, so measure the body.',
+              { type: 'integer' },
+            ),
+            required: false,
+          },
           'X-Image-Width': header('Width of the image in pixels.', { type: 'integer' }),
           'X-Image-Height': header('Height of the image in pixels.', { type: 'integer' }),
           'X-Image-Format': header('Encoding of the image.', {

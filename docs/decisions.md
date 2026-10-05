@@ -1003,3 +1003,32 @@ it is not refused; the raw query is not inspected for it. Adding a parameter to 
 now also makes it acceptable, so an older deployment refuses a newer client's parameter
 instead of ignoring it. The OpenAPI document is unchanged: zod-to-openapi enumerates query
 parameters from the shape, and the generated document is byte-identical before and after.
+
+## 62. The OpenAPI document lists the headers the service sets
+
+**Date:** 2026-10-04
+**Context:** The OpenAPI document described no response headers, so a client generated from
+it could not learn about `ETag`, `X-Request-Id`, the `X-Image-*` headers, or the rate-limit
+headers.
+**Decision:** Every documented response lists the headers the service sets on it, each with
+a description, and with a `const` or `enum` where the service fixes the value. Decision 46's
+mechanism is extended to headers: one function in `http/openapi.ts` builds the headers of
+every problem response, component or inline, adding `Retry-After`, `RateLimit`, and
+`RateLimit-Policy` where `rate_limited` is among its codes and `Allow` where
+`method_not_allowed` is. `Content-Type` is documented by each response's content map and
+not under `headers`, because OpenAPI 3.1.0, Response Object, says of `headers`: "If a
+response header is defined with the name "Content-Type", it SHALL be ignored."
+`Content-Length` on the `/process` 200 is listed as not required, since a streamed
+response may arrive chunked without it (architecture §7). Headers the transport adds (the
+Node server, the function URL, CloudFront: `Date`, `X-Cache`, `X-Amz-Cf-Id`) are not the
+service's and are left out. `Access-Control-Expose-Headers` is described in prose rather
+than with a `const`, because its list lives in `app.ts`, which imports `http/openapi.ts`, so
+importing the list back would form a cycle.
+**Rejected:** Listing `Content-Type` under `headers` as well: spec-conformant tools ignore
+it. Declaring the headers with Zod objects: registered response components bypass
+zod-to-openapi's generator, so the components and the inline responses would be written two
+ways. Moving the CORS configuration to its own module to share the exposed list: a
+restructuring beyond documenting headers.
+**Consequences:** A test compares, for each kind of response, the documented header set and
+its fixed values with the headers a real request receives, so a header added to or removed
+from a route without the document fails it.

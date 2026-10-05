@@ -3,6 +3,7 @@ import type { ErrorCode } from '@image-service/sdk';
 import { WINDOW_MS } from '../rate-limit/limiter.ts';
 import type { AppEnv } from './context.ts';
 import { ERROR_CODES, STATUS } from './errors.ts';
+import { REQUEST_ID } from './middleware/request-id.ts';
 
 export const DOCUMENTATION_CACHE_CONTROL = 'public, max-age=3600';
 
@@ -36,12 +37,8 @@ type Header = {
   schema: { type: 'string' | 'integer'; enum?: string[]; const?: string };
 };
 
-export function header(
-  description: string,
-  schema: Header['schema'] = { type: 'string' },
-  required = true,
-): Header {
-  return { description, required, schema };
+export function header(description: string, schema: Header['schema'] = { type: 'string' }): Header {
+  return { description, required: true, schema };
 }
 
 // Set on every response by the request-id and cors middleware; the route supplies its own
@@ -53,7 +50,7 @@ export function commonHeaders(cacheControl: string): Record<string, Header> {
       const: cacheControl,
     }),
     'X-Request-Id': header(
-      "Identifies this request: the caller's X-Request-Id if it matches [A-Za-z0-9._-]{1,64}, else a generated one.",
+      `Identifies this request: the caller's X-Request-Id if it matches ${REQUEST_ID.source}, else a generated one.`,
     ),
     'Access-Control-Allow-Origin': header('Any origin may read the response.', {
       type: 'string',

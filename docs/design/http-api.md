@@ -189,7 +189,8 @@ these, and its problem responses, component or inline, add `Retry-After`, `RateL
 `Content-Length`, marked not required because a streamed delivery may arrive chunked; its
 304 adds `ETag`. `Content-Type` is documented by each response's content map, since
 OpenAPI 3.1 ignores a response header of that name. Headers added by the transport (the
-Node server, the function URL, CloudFront) are not the service's and are not listed.
+Node server, the function URL, CloudFront) are not the service's and are not listed
+(decision 62).
 
 `/openapi.json` gets its `Cache-Control` from a middleware that sets it on a 200 only,
 because `doc31` registers its own handler. The sentence per code on `/docs` lives in
@@ -219,7 +220,7 @@ deployment.
 - `routing.test.ts`: unknown path is 404 problem; `POST /process` is 405 with `Allow`;
   `/health` shape and `no-store`; `/openapi.json` lists the three paths and every
   parameter, and each documented response lists exactly the headers the service sends
-  with it;
-  `/docs` contains an anchor for every error code.
+  with it, with their values where it fixes them; `/docs` contains an anchor for every
+  error code.
 - `middleware.test.ts`: request-id accepted when valid, regenerated when not; the loop
   marker is refused; CORS headers present on 200, 304, and error responses.

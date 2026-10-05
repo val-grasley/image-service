@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from 'hono';
 import type { Logger } from '../../observability/logger.ts';
 import type { AppEnv } from '../context.ts';
 
-const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
+export const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
 export function requestId(logger: Logger): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
