@@ -67,9 +67,10 @@ with `fields` built from the Zod issues: `field` is the parameter name, `message
 sentence saying what is accepted (`must be an integer between 1 and 4096`). Both query
 schemas are strict, so a parameter the route does not define fails validation: Zod reports
 every unknown key in one `unrecognized_keys` issue whose `keys` lists them, and the hook
-writes one entry per key, with the message `unknown parameter` set on the schema
-(decision 61). A repeated key reaches the schema as an array, so it fails as that
-parameter's own error, or once as unknown.
+writes one entry per key, with the message set on the schema and built from its keys
+(`not accepted; use url, width, height, crop, format, quality`; decision 61). A repeated
+key reaches the schema as an array, so it fails as that parameter's own error, or once as
+unknown.
 
 ## Routes
 
@@ -116,9 +117,10 @@ first deploy (`design/infrastructure.md`, "Lambda entry"); clients measure size 
 regardless (section 7).
 
 Each validation message is set on its Zod check (`{ error }`), and the cross-field
-refinement carries its own, so the default hook only copies `issue.message` into `fields`,
-one entry per parameter. The query schema's output types an omitted field as
-`T | undefined`, so `toSpec` accepts that shape as well as `ProcessParams` (decision 45).
+refinement carries its own, so the default hook copies `issue.message` into `fields`, one
+entry per parameter (an `unrecognized_keys` issue gives one entry per key; see "Errors").
+The query schema's output types an omitted field as `T | undefined`, so `toSpec` accepts
+that shape as well as `ProcessParams` (decision 45).
 
 **`GET /info`.** Same `url` schema only, also strict. Calls `describeSource`, which fetches
 (through the source cache), sniffs, and inspects. Responds with JSON

@@ -17,7 +17,7 @@ export const sourceUrlParam = z.url({ error: 'must be an absolute URL' }).openap
 export function strictQuery<Shape extends z.core.$ZodLooseShape>(
   shape: Shape,
 ): z.ZodObject<z.core.util.Writeable<Shape>, z.core.$strict> {
-  return z.strictObject(shape, { error: 'unknown parameter' });
+  return z.strictObject(shape, { error: `not accepted; use ${Object.keys(shape).join(', ')}` });
 }
 
 function integer(min: number, max: number) {

@@ -344,7 +344,9 @@ This section is the contract the design document must not contradict.
 
 No other parameter is accepted: an unknown one, including a known name in another case, is
 a 400 `invalid_parameter` naming it, so a misspelling cannot return an untransformed image
-and extra parameters cannot mint cache keys (decision 61). `/info` accepts only `url`.
+and extra parameters cannot mint cache keys (decision 61). `/info` accepts only `url`. A pair
+with an empty name (`&=5`, `&&`, a trailing `&`) is dropped by the query parser before
+validation, so it is not refused.
 
 Animated inputs contribute their first frame. AVIF encoding uses a fixed low effort so encode
 time stays inside the transform budget.
@@ -404,7 +406,8 @@ a CloudFront custom error response can convert it and is a listed next step.
 
 `type` is a relative reference resolved against the request URL, so it is valid on any host.
 Validation errors add `errors: [{ field, message }]`, one entry per rejected parameter; an
-unknown parameter's message is `unknown parameter`.
+unknown parameter's message lists the ones the endpoint accepts
+(`not accepted; use url, width, height, crop, format, quality`).
 
 | Situation | Status | Code |
 |---|---|---|

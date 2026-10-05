@@ -983,11 +983,13 @@ existing format-omitted png ETag changes once.
 /process?url=...&widht=5` answered 200 with the image untransformed, and because the
 CloudFront cache policy keys on every query string, each extra parameter minted a new
 cacheable entry for the same image.
-**Decision:** The `/process` and `/info` query schemas are `z.strictObject`, carrying the
-message `unknown parameter`. Zod 4.6.5 reports the unknown keys of one object as a single
-issue, `{ code: 'unrecognized_keys', keys: string[], path, message }`, and the validation
-hook writes one `errors` entry per key, so the problem names each parameter rather than the
-query as a whole. Approved by the author before implementation.
+**Decision:** The `/process` and `/info` query schemas are `z.strictObject`, carrying a
+message built from the schema's own keys, `not accepted; use url, width, height, crop,
+format, quality` on `/process` and `not accepted; use url` on `/info`, so the entry says
+what is accepted as every other validation message does. Zod 4.6.5 reports the unknown
+keys of one object as a single issue, `{ code: 'unrecognized_keys', keys: string[], path,
+message }`, and the validation hook writes one `errors` entry per key, so the problem names
+each parameter rather than the query as a whole. Approved by the author before implementation.
 **Rejected:** Ignoring unknown parameters (the previous behavior): a typo succeeds silently.
 Stripping them at the edge with a CloudFront Function: fixes the cache keys but not the
 silent typo, and adds an edge component. Rejecting only near-misses of known names: a
@@ -995,7 +997,9 @@ guess, and still mints keys for anything else.
 **Consequences:** Unknown parameters, including a known name in another case and the spill
 of an unencoded source URL's own query string (`url=...?w=10&h=20` names `h`), are 400 and
 never fetched. The SDK and the UI are unaffected, since they build URLs only from known
-parameters. Adding a parameter to the contract now also makes it acceptable, so an older
-deployment refuses a newer client's parameter instead of ignoring it. The OpenAPI document
-is unchanged: zod-to-openapi enumerates query parameters from the shape, and the generated
-document is byte-identical before and after.
+parameters. A pair with an empty name (`&=5`, `&&`, a trailing `&`) is dropped by Hono's
+query parser (`hono/dist/utils/url.js`, `if (name === "") continue`) before validation, so
+it is not refused; the raw query is not inspected for it. Adding a parameter to the contract
+now also makes it acceptable, so an older deployment refuses a newer client's parameter
+instead of ignoring it. The OpenAPI document is unchanged: zod-to-openapi enumerates query
+parameters from the shape, and the generated document is byte-identical before and after.

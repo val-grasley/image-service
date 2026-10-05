@@ -67,7 +67,7 @@ describe('GET /info validation', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
       code: 'invalid_parameter',
-      errors: [{ field: 'width', message: 'unknown parameter' }],
+      errors: [{ field: 'width', message: 'not accepted; use url' }],
     });
     expect(fake.requests()).toHaveLength(before);
   });

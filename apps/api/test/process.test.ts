@@ -144,7 +144,7 @@ describe('GET /process validation', () => {
   const integer1To1024 = 'must be an integer between 1 and 1024';
   const integer1To100 = 'must be an integer between 1 and 100';
   const absoluteUrl = 'must be an absolute URL';
-  const unknownParameter = 'unknown parameter';
+  const unknownParameter = 'not accepted; use url, width, height, crop, format, quality';
   const cases: { name: string; params: Record<string, string>; field: string; message: string }[] =
     [
       {
@@ -327,6 +327,13 @@ describe('GET /process validation', () => {
       expect(fake.requests()).toHaveLength(before);
     });
   }
+
+  it('answers pairs with an empty name, which the query parser drops before validation', async () => {
+    const { request } = createHarness(fake);
+    const params = new URLSearchParams({ url: sourceUrl(fake, '/image/png'), width: '10' });
+    const response = await request(`/process?${params.toString()}&=5&&`);
+    expect(response.status).toBe(200);
+  });
 
   it('refuses a known parameter given twice as an error on that parameter', async () => {
     const { request } = createHarness(fake);
