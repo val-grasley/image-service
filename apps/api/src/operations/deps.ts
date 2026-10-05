@@ -20,6 +20,11 @@ export type OperationDeps = {
   policy: PolicyConfig;
   limits: Pick<
     Config,
-    'maxInputPixels' | 'maxOutputBytes' | 'maxAvifOutputPixels' | 'transformTimeoutSeconds'
+    | 'maxInputPixels'
+    | 'maxOutputDimension'
+    | 'maxOutputPixels'
+    | 'maxOutputBytes'
+    | 'maxAvifOutputPixels'
+    | 'transformTimeoutSeconds'
   >;
 };

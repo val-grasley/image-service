@@ -96,7 +96,10 @@ zod-to-openapi documents a preprocess by its output schema, so the document stil
 `type: integer` with the same `minimum` and `maximum`.
 
 A cross-field refinement rejects `width * height > MAX_OUTPUT_PIXELS` with a message on
-`width`. `MAX_*` come from config, so the schema is built by a function of config inside
+`width`. These 400s cover only the requested dimensions; when a resize is requested, the
+pipeline checks the same limits on the computed output size and answers 422
+`output_too_large` (decision 68). `MAX_*` come from config, so the schema is built by a
+function of config inside
 `createApp`.
 
 **Type lock against the SDK.** `z.ZodType<Params>` only checks assignability, which misses an

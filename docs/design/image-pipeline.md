@@ -85,7 +85,7 @@ function fromSharpError(error: unknown, warned: boolean): ServiceError; // expor
 ```
 
 `PipelineLimits` is the slice of `Config` with `maxInputPixels`, `transformTimeoutSeconds`,
-`maxOutputBytes`, and `maxAvifOutputPixels`.
+`maxOutputDimension`, `maxOutputPixels`, `maxOutputBytes`, and `maxAvifOutputPixels`.
 
 **inspect** reads the header through sharp's `metadata()` without decoding pixels. It opens
 the input with `limitInputPixels: false`, because the limit is enforced when the input is
@@ -100,12 +100,17 @@ defaults to 1 when sharp omits it. A header sharp cannot parse throws
 
 **transform**, in this fixed order:
 
-1. Resolve the output format. When it is avif, compute the output dimensions with
-   `outputDimensions(info, spec)` and throw `output_too_large` if their product exceeds
-   `maxAvifOutputPixels`, before the input is opened. The detail names
-   `MAX_AVIF_OUTPUT_PIXELS`, the computed dimensions and pixel count, and the limit. sharp's
-   timeout is checked only during libvips evaluation and does not interrupt the AVIF encoder,
-   so pixel count is what bounds its time (decision 64).
+1. Resolve the output format and compute the output dimensions with
+   `outputDimensions(info, spec)`. Before the input is opened, throw `output_too_large` if,
+   when `width` or `height` is set, either dimension exceeds `maxOutputDimension` or their
+   product exceeds `maxOutputPixels`, or, for avif, if the product exceeds
+   `maxAvifOutputPixels`, checked in that order. The route validates only the requested
+   dimensions, so a derived dimension is bounded only here. With neither set the output is
+   the source, which `maxInputPixels` already bounds, so only the AVIF cap applies, since its
+   reason is encode time rather than derived size (decision 68). Each detail names
+   the variable, the computed dimensions and pixel count, and the limit. sharp's timeout is
+   checked only during libvips evaluation and does not interrupt the AVIF encoder, so pixel
+   count is what bounds its time, and the AVIF cap is the stricter one (decision 64).
 2. `sharp(bytes, { limitInputPixels: maxInputPixels })` with `.timeout({ seconds })`.
    `transform` passes the limit itself so it is safe for any caller that skipped `inspect`.
 3. `.autoOrient()`: applies the EXIF orientation so later dimensions are the visual ones.
@@ -221,6 +226,13 @@ change, and contains the href.
   quality can meet the PNG encoder, since a `format: 'png'` spec carries none.
 - A `noise` source whose png output exceeds a small `maxOutputBytes` throws
   `output_too_large`; the same with jpeg passes.
+- Through the app (`process.test.ts`): a 4 by 4000 png with `crop=fill&width=4096` under
+  the default dimension limits is 422 naming `MAX_OUTPUT_DIMENSION` for png, jpeg, and webp
+  output; a resize whose output is over `MAX_OUTPUT_PIXELS`, or whose derived side is over
+  `MAX_OUTPUT_DIMENSION`, is 422, and one exactly at either limit is 200; a request without
+  dimensions on a source over either limit is 200 at the source size; an avif output between
+  the AVIF cap and `MAX_OUTPUT_PIXELS` is 422 naming the AVIF cap even without dimensions,
+  while webp passes.
 - An avif output above a small `maxAvifOutputPixels` throws `output_too_large` with the
   detail naming the variable and the computed size; the same source resized under the cap,
   or encoded as webp, passes; a source kept as avif is capped too.

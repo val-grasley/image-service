@@ -17,7 +17,12 @@ export type TransformResult = {
 
 type PipelineLimits = Pick<
   Config,
-  'maxInputPixels' | 'transformTimeoutSeconds' | 'maxOutputBytes' | 'maxAvifOutputPixels'
+  | 'maxInputPixels'
+  | 'transformTimeoutSeconds'
+  | 'maxOutputDimension'
+  | 'maxOutputPixels'
+  | 'maxOutputBytes'
+  | 'maxAvifOutputPixels'
 >;
 
 export const PIPELINE_REVISION = '4';
@@ -68,16 +73,10 @@ export async function transform(
 ): Promise<TransformResult> {
   const target = resolveEncoding(spec, info.format);
   const { format } = target;
-  if (format === 'avif') {
-    // sharp's timeout cannot interrupt the AVIF encoder, so its time is bounded by pixel count.
-    const { width, height } = outputDimensions(info, spec);
-    const pixels = width * height;
-    if (pixels > limits.maxAvifOutputPixels) {
-      throw new ServiceError(
-        'output_too_large',
-        `The AVIF output would be ${String(width)} by ${String(height)} (${String(pixels)} pixels); MAX_AVIF_OUTPUT_PIXELS allows at most ${String(limits.maxAvifOutputPixels)}; request smaller dimensions or another format.`,
-      );
-    }
+  const resized = spec.width !== undefined || spec.height !== undefined;
+  const refusal = outputLimitBreach(outputDimensions(info, spec), resized, format, limits);
+  if (refusal !== undefined) {
+    throw new ServiceError('output_too_large', refusal);
   }
   let warned = false;
   let image = sharp(bytes, { limitInputPixels: limits.maxInputPixels })
@@ -114,6 +113,31 @@ export async function transform(
     width: output.info.width,
     height: output.info.height,
   };
+}
+
+// The route checks only the requested dimensions, and a resize can derive the other one from
+// the aspect ratio, so the output limits are checked again on the size it will produce.
+// Without a resize the output is the source, which MAX_INPUT_PIXELS already bounds (decision
+// 68). The AVIF cap bounds encode time rather than size, so it applies either way.
+function outputLimitBreach(
+  { width, height }: { width: number; height: number },
+  resized: boolean,
+  format: OutputFormat,
+  limits: PipelineLimits,
+): string | undefined {
+  const pixels = width * height;
+  const size = `${String(width)} by ${String(height)} (${String(pixels)} pixels)`;
+  if (resized && (width > limits.maxOutputDimension || height > limits.maxOutputDimension)) {
+    return `The output would be ${size}; MAX_OUTPUT_DIMENSION allows at most ${String(limits.maxOutputDimension)} on each side; request smaller dimensions.`;
+  }
+  if (resized && pixels > limits.maxOutputPixels) {
+    return `The output would be ${size}; MAX_OUTPUT_PIXELS allows at most ${String(limits.maxOutputPixels)}; request smaller dimensions.`;
+  }
+  // sharp's timeout cannot interrupt the AVIF encoder, so its time is bounded by pixel count.
+  if (format === 'avif' && pixels > limits.maxAvifOutputPixels) {
+    return `The AVIF output would be ${size}; MAX_AVIF_OUTPUT_PIXELS allows at most ${String(limits.maxAvifOutputPixels)}; request smaller dimensions or another format.`;
+  }
+  return undefined;
 }
 
 function resizeOptions(

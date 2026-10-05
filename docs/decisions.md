@@ -1184,3 +1184,35 @@ of a scale crop (Cloudinary's `c_scale`, for one) keeps the aspect ratio.
 **Consequences:** `scale` with one dimension now gives the same size as `fill` and `pad`
 with that dimension. The ETag includes the revision, so an edge copy of an old output fails
 revalidation after a deploy and is replaced.
+
+## 68. The output limits hold for a resize's computed output size
+
+**Date:** 2026-10-04
+**Context:** Architecture section 7 bounds each output dimension by `MAX_OUTPUT_DIMENSION`
+and their product by `MAX_OUTPUT_PIXELS`, but the route checked only the requested
+parameters. With one dimension, `fill`, `pad`, and (since decision 67) `scale` derive the
+other from the aspect ratio, so an extreme source derives an arbitrarily large axis: a 4 by
+4000 PNG with `crop=fill&width=4096` asks for 4096 by 4,096,000, which ran out the 5 s
+budget as `transform_timeout` for png and failed as 500 `internal_error` against the
+encoders' own size limits for webp and jpeg.
+**Decision:** When `width` or `height` is given, `transform` checks the dimensions
+`outputDimensions` computes before it opens the input: a side over `MAX_OUTPUT_DIMENSION`,
+then a product over `MAX_OUTPUT_PIXELS`. For avif it then checks the product against
+`MAX_AVIF_OUTPUT_PIXELS` (decision 64) whether or not a dimension was given. Each is 422
+`output_too_large`, decision 23's code for an output the service will not produce, widened
+as decision 64 widened it; the detail names the variable, the computed size, and the limit.
+The route's 400 for out-of-range requested parameters is unchanged. A request with neither
+dimension is exempt from the first two checks, by the author's ruling: its output is the
+source at its own size, which `MAX_INPUT_PIXELS` already bounds, so nothing is derived that
+could exceed the limits the way an aspect ratio can. The AVIF cap is not exempt, because its
+reason is encode time, which an unresized source costs as much as a resized one.
+**Rejected:** Holding a request without dimensions to the output limits too: it would refuse
+a plain format conversion of a 6000 by 4000 photograph that `MAX_INPUT_PIXELS` admits.
+Clamping the derived dimension to the limit: silently returns a different size than the
+aspect ratio promises. 400 `invalid_parameter`: the parameters are each valid, and the
+breach depends on the fetched source, which decision 23 reports as 4xx on the content rather
+than the request. Checking in the route: the source size is not known there.
+**Consequences:** Decision 27 sized the byte cap on outputs that stop at `MAX_OUTPUT_PIXELS`;
+that holds for every resize, while an unresized output can reach `MAX_INPUT_PIXELS` and is
+bounded by `MAX_OUTPUT_BYTES` alone, as before. The test configuration gains
+`MAX_AVIF_OUTPUT_PIXELS`, which it lacked.

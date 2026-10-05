@@ -418,6 +418,84 @@ describe('GET /process output limits', () => {
     expect(accepted.status).toBe(200);
     expect(await decoded(accepted)).toEqual({ format: 'heif', width: 320, height: 240 });
   });
+
+  const problem = z.object({ code: z.string(), detail: z.string() });
+
+  for (const format of ['png', 'jpeg', 'webp']) {
+    it(`refuses a ${format} whose derived height exceeds MAX_OUTPUT_DIMENSION with 422`, async () => {
+      // The default limits: a width of 4096 is valid, and fill derives the height from a 1:1000 source.
+      const { request } = createHarness(fake, {
+        config: { maxOutputDimension: 4096, maxOutputPixels: 16_000_000 },
+      });
+      const url = sourceUrl(fake, '/image/png?w=4&h=4000');
+      const response = await request(
+        query('/process', { url, crop: 'fill', width: '4096', format }),
+      );
+      expect(response.status).toBe(422);
+      expect(problem.parse(await response.json())).toEqual({
+        code: 'output_too_large',
+        detail:
+          'The output would be 4096 by 4096000 (16777216000 pixels); MAX_OUTPUT_DIMENSION allows at most 4096 on each side; request smaller dimensions.',
+      });
+    });
+  }
+
+  it('refuses a resize whose output is above MAX_OUTPUT_PIXELS with 422', async () => {
+    const { request } = createHarness(fake);
+    // fit never enlarges, so width 1000 keeps the 1000 by 1001 source as it is.
+    const url = sourceUrl(fake, '/image/png?w=1000&h=1001');
+    const response = await request(query('/process', { url, width: '1000' }));
+    expect(response.status).toBe(422);
+    expect(problem.parse(await response.json())).toEqual({
+      code: 'output_too_large',
+      detail:
+        'The output would be 1000 by 1001 (1001000 pixels); MAX_OUTPUT_PIXELS allows at most 1000000; request smaller dimensions.',
+    });
+  });
+
+  it('refuses a resize whose derived side is above MAX_OUTPUT_DIMENSION with 422', async () => {
+    const { request } = createHarness(fake);
+    const url = sourceUrl(fake, '/image/png?w=10&h=1025');
+    const response = await request(query('/process', { url, width: '10' }));
+    expect(response.status).toBe(422);
+    expect(problem.parse(await response.json()).detail).toContain('MAX_OUTPUT_DIMENSION');
+  });
+
+  it('accepts a resize whose output is exactly at MAX_OUTPUT_PIXELS and at MAX_OUTPUT_DIMENSION', async () => {
+    const { request } = createHarness(fake);
+    const atPixels = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png?w=1000&h=1000'), width: '1000' }),
+    );
+    const atDimension = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png?w=10&h=1024'), width: '10' }),
+    );
+    expect([atPixels.status, atDimension.status]).toEqual([200, 200]);
+    expect(await decoded(atPixels)).toEqual({ format: 'png', width: 1000, height: 1000 });
+    expect(await decoded(atDimension)).toEqual({ format: 'png', width: 10, height: 1024 });
+  });
+
+  it('returns a source above MAX_OUTPUT_PIXELS or wider than MAX_OUTPUT_DIMENSION at its own size when no dimension is given', async () => {
+    const { request } = createHarness(fake);
+    const overPixels = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png?w=1000&h=1001') }),
+    );
+    const overDimension = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png?w=1025&h=10') }),
+    );
+    expect([overPixels.status, overDimension.status]).toEqual([200, 200]);
+    expect(await decoded(overPixels)).toEqual({ format: 'png', width: 1000, height: 1001 });
+    expect(await decoded(overDimension)).toEqual({ format: 'png', width: 1025, height: 10 });
+  });
+
+  it('applies the AVIF cap to an avif output even when no dimension is given', async () => {
+    const { request, config } = createHarness(fake);
+    const url = sourceUrl(fake, '/image/png?w=800&h=700');
+    const avif = await request(query('/process', { url, format: 'avif' }));
+    const webp = await request(query('/process', { url, format: 'webp' }));
+    expect(config.maxAvifOutputPixels).toBeLessThan(800 * 700);
+    expect([avif.status, webp.status]).toEqual([422, 200]);
+    expect(problem.parse(await avif.json()).detail).toContain('MAX_AVIF_OUTPUT_PIXELS');
+  });
 });
 
 describe('GET /process on a source whose header reads but whose pixels do not decode', () => {

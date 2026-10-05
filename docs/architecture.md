@@ -190,7 +190,8 @@ in AGENTS.md.
    validator this requires the source bytes, which step 7 has already fetched.
 10. **Transform.** `image/pipeline.ts` applies EXIF orientation, resizes per crop mode, strips
     metadata, encodes. Bounded by `TRANSFORM_TIMEOUT_SECONDS` via sharp's timeout, which
-    counts from when libvips opens the input. An AVIF output whose computed dimensions exceed
+    counts from when libvips opens the input. A resize whose computed dimensions exceed
+    `MAX_OUTPUT_DIMENSION` or `MAX_OUTPUT_PIXELS`, or an AVIF output above
     `MAX_AVIF_OUTPUT_PIXELS` → 422 before the input is opened. A source whose header read
     but whose pixel data cannot be decoded, such as a truncated file → 415. Output above
     `MAX_OUTPUT_BYTES` → 422.
@@ -341,7 +342,7 @@ This section is the contract the design document must not contradict.
 | Parameter | Type | Default | Notes |
 |---|---|---|---|
 | `url` | string | required | Section 5 |
-| `width`, `height` | integer | none | 1 to `MAX_OUTPUT_DIMENSION`; product at most `MAX_OUTPUT_PIXELS`; one may be omitted to keep aspect |
+| `width`, `height` | integer | none | 1 to `MAX_OUTPUT_DIMENSION`; product at most `MAX_OUTPUT_PIXELS`; one may be omitted to keep aspect. When either is given, the same limits hold for the computed output, so a dimension derived from the aspect ratio past either limit is a 422; with neither, the output is the source, bounded by `MAX_INPUT_PIXELS` |
 | `crop` | `fit`, `fill`, `scale`, `pad` | `fit` | `fit` never enlarges; the others produce the exact requested size and may enlarge |
 | `format` | `jpeg`, `png`, `webp`, `avif` | source format; `png` for TIFF and GIF sources | |
 | `quality` | integer 1 to 100 | `DEFAULT_QUALITY` | Passed to lossy encoders only; not passed to the PNG or GIF encoders |
@@ -426,7 +427,7 @@ unknown parameter's message lists the ones the endpoint accepts
 | URL blocked by policy, including a blocked redirect hop or the loop marker | 403 | `url_not_allowed` |
 | Source exceeds `MAX_SOURCE_BYTES` or `MAX_INPUT_PIXELS` | 413 | `source_too_large` |
 | Source is not a supported image type, or cannot be decoded | 415 | `unsupported_source_type` |
-| Output exceeds `MAX_OUTPUT_BYTES`, or an AVIF output would exceed `MAX_AVIF_OUTPUT_PIXELS` | 422 | `output_too_large` |
+| Output exceeds `MAX_OUTPUT_BYTES`; a resize's computed size would exceed `MAX_OUTPUT_DIMENSION` or `MAX_OUTPUT_PIXELS`; or an AVIF output would exceed `MAX_AVIF_OUTPUT_PIXELS` | 422 | `output_too_large` |
 | Rate limited | 429 | `rate_limited` |
 | Upstream returned non-2xx, was unreachable, or refused the connection | 502 | `upstream_error` |
 | Too many redirects | 502 | `too_many_redirects` |
@@ -457,8 +458,8 @@ JPEG, PNG, WebP, GIF, AVIF, TIFF (decision 14).
 | `FETCH_TOTAL_TIMEOUT_MS` | 8000 | Whole redirect chain and body |
 | `MAX_REDIRECTS` | 3 | Enough for CDNs, not for loops |
 | `TRANSFORM_TIMEOUT_SECONDS` | 5 | sharp's timeout takes whole seconds; bounds decode plus encode |
-| `MAX_OUTPUT_DIMENSION` | 4096 | Larger outputs are a CPU attack, not a thumbnail |
-| `MAX_OUTPUT_PIXELS` | 16 MP | Caps the product of both dimensions |
+| `MAX_OUTPUT_DIMENSION` | 4096 | Larger outputs are a CPU attack, not a thumbnail. Checked on the request (400) and on a resize's computed output (422) |
+| `MAX_OUTPUT_PIXELS` | 16 MP | Caps the product of both dimensions, requested (400) and computed for a resize (422) |
 | `MAX_AVIF_OUTPUT_PIXELS` | 8 MP (8,000,000) | sharp's timeout cannot stop the AVIF encoder; 8 MP at effort 0 encodes in about 2 s, inside the transform budget |
 | `MAX_OUTPUT_BYTES` | 10 MB (10,000,000) | Keeps delivery inside the Lambda streaming budget; a 16 MP PNG can exceed 30 MB |
 | `DEFAULT_QUALITY` | 80 | Conventional lossy default |
