@@ -10,15 +10,20 @@ section 7. Directory: `apps/api/src/image/`. `pipeline.ts` is the only module in
 type CropMode = 'fit' | 'fill' | 'scale' | 'pad';
 type OutputFormat = 'jpeg' | 'png' | 'webp' | 'avif';
 
+type Encoding =
+  | { format: 'png' }
+  | { format: Exclude<OutputFormat, 'png'>; quality: number };
+
 type TransformSpec = {
   url: URL;
   width: number | undefined;
   height: number | undefined;
   crop: CropMode;
-} & ({ format: 'png' } | { format: Exclude<OutputFormat, 'png'> | 'source'; quality: number });
+} & (Encoding | { format: 'source'; quality: number });
 
 function toSpec(params: ProcessParams, defaults: { quality: number }): TransformSpec;
 function cacheKey(spec: TransformSpec): string;   // format in design/caching.md
+function resolveEncoding(spec: TransformSpec, source: SourceType): Encoding;
 ```
 
 `ProcessParams` is the SDK's validated parameter type; `toSpec` also accepts it with
@@ -28,7 +33,10 @@ field (decision 45). `toSpec` applies defaults:
 it drops `quality`, given or defaulted, because the PNG encoder never receives one; the spec,
 the cache key, and the ETag therefore do not vary with it (decision 58). `'source'` keeps
 its quality, since it may resolve to a lossy format. Range validation has already happened
-in the route. `cacheKey` is pure and total.
+in the route. `cacheKey` is pure and total. `resolveEncoding` resolves `'source'` against the
+sniffed type (the mapping under "Output mapping") and returns the format with its quality,
+or png with none; the pipeline encodes with it and the operation uses it to drop quality
+from the ETag of a `'source'` request that resolves to png (decision 60).
 
 ## pipeline.ts
 
@@ -94,6 +102,9 @@ offered.
 
 ### Output mapping
 
+The source-to-output mapping and `resolveEncoding` live in `spec.ts`; the encoder options
+live here.
+
 | Output | Encoder options |
 |---|---|
 | jpeg | `{ quality, mozjpeg: true }` |
@@ -101,11 +112,11 @@ offered.
 | webp | `{ quality }` |
 | avif | `{ quality, effort: 2 }` |
 
-The quality comes from the spec; a spec with `format: 'png'` has none, and one with
-`format: 'source'` that resolves to png has one the encoder does not receive.
-`format: 'source'` resolves from `info.format`, the sniffed type: jpeg, png, webp, avif map
-to themselves; tiff maps to png; gif maps to png. GIF output is not offered because it would be a lossy
-re-quantization of the first frame with no benefit over png.
+The format and quality come from `resolveEncoding(spec, info.format)`, so the PNG encoder
+is never handed a quality. `format: 'source'` resolves from `info.format`, the sniffed type:
+jpeg, png, webp, avif map to themselves; tiff maps to png; gif maps to png. GIF output is not
+offered because it would be a lossy re-quantization of the first frame with no benefit over
+png.
 
 Animated inputs contribute their first frame, which is sharp's default when `animated` is
 not set.
@@ -124,7 +135,8 @@ as `cause`.
 
 ## Tests
 
-`spec.test.ts`: defaults applied; quality dropped for `format: 'png'` and kept for every
+`spec.test.ts`: defaults applied; `resolveEncoding` for an omitted format on png, tiff,
+gif, and jpeg sources and for an explicit format; quality dropped for `format: 'png'` and kept for every
 other format, including `'source'`; `cacheKey` is identical for two specs with equal fields,
 and for two png specs differing only in quality, distinct for each other single field
 change, and contains the href.

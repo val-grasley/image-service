@@ -1,13 +1,26 @@
-import type { CropMode, OutputFormat, ProcessParams } from '@image-service/sdk';
+import type { CropMode, OutputFormat, ProcessParams, SourceType } from '@image-service/sdk';
 
 // PNG is lossless, so a quality would only split the cache and the ETag over identical bytes.
+export type Encoding =
+  { format: 'png' } | { format: Exclude<OutputFormat, 'png'>; quality: number };
+
 // `source` keeps its quality because the source may resolve to a lossy format.
 export type TransformSpec = {
   url: URL;
   width: number | undefined;
   height: number | undefined;
   crop: CropMode;
-} & ({ format: 'png' } | { format: Exclude<OutputFormat, 'png'> | 'source'; quality: number });
+} & (Encoding | { format: 'source'; quality: number });
+
+const SOURCE_OUTPUT: Record<SourceType, OutputFormat> = {
+  jpeg: 'jpeg',
+  png: 'png',
+  webp: 'webp',
+  avif: 'avif',
+  tiff: 'png',
+  // GIF output would re-quantize the first frame with no benefit over PNG.
+  gif: 'png',
+};
 
 // Zod types an omitted optional field as `T | undefined`, which exactOptionalPropertyTypes keeps
 // apart from ProcessParams' absent key; toSpec treats the two alike.
@@ -40,4 +53,12 @@ export function cacheKey(spec: TransformSpec): string {
     `format=${spec.format}`,
     `q=${spec.format === 'png' ? '-' : String(spec.quality)}`,
   ].join('|');
+}
+
+export function resolveEncoding(spec: TransformSpec, source: SourceType): Encoding {
+  if (spec.format === 'png') {
+    return { format: 'png' };
+  }
+  const format = spec.format === 'source' ? SOURCE_OUTPUT[source] : spec.format;
+  return format === 'png' ? { format } : { format, quality: spec.quality };
 }

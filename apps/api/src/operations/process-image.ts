@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { CachedResult } from '../cache/result-cache.ts';
-import { cacheKey, type TransformSpec } from '../image/spec.ts';
+import { cacheKey, resolveEncoding, type TransformSpec } from '../image/spec.ts';
 import type { Logger } from '../observability/logger.ts';
 import type { FetchedSource } from '../source/fetcher.ts';
 import type { OperationDeps } from './deps.ts';
@@ -25,7 +25,14 @@ export async function processImage(
       : { kind: 'image', result: cached, fromCache: true };
   }
   const { source, info } = await loadSource(spec.url, deps, log);
-  const etag = entityTag(key, deps.pipeline.pipelineVersion(), source);
+  // With format omitted the key keeps quality, being formed before the source type is known.
+  // Once the output is known to be png the ETag drops quality, as toSpec does for png.
+  const { url, width, height, crop } = spec;
+  const etagKey =
+    resolveEncoding(spec, info.format).format === 'png'
+      ? cacheKey({ url, width, height, crop, format: 'png' })
+      : key;
+  const etag = entityTag(etagKey, deps.pipeline.pipelineVersion(), source);
   if (matches(ifNoneMatch, etag)) {
     return { kind: 'not_modified', etag };
   }

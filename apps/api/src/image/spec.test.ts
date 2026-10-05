@@ -1,6 +1,6 @@
-import type { ProcessParams } from '@image-service/sdk';
+import type { ProcessParams, SourceType } from '@image-service/sdk';
 import { describe, expect, it } from 'vitest';
-import { cacheKey, toSpec, type TransformSpec } from './spec.ts';
+import { cacheKey, resolveEncoding, toSpec, type Encoding, type TransformSpec } from './spec.ts';
 
 const defaults = { quality: 80 };
 const href = 'https://images.example/photos/cat.jpg?size=large';
@@ -116,6 +116,40 @@ describe('cacheKey', () => {
       const low = toSpec({ url: href, ...(format && { format }), quality: 10 }, defaults);
       const high = toSpec({ url: href, ...(format && { format }), quality: 90 }, defaults);
       expect(cacheKey(low)).not.toBe(cacheKey(high));
+    });
+  }
+});
+
+describe('resolveEncoding', () => {
+  const cases: { name: string; params: ProcessParams; source: SourceType; expect: Encoding }[] = [
+    {
+      name: 'resolves an omitted format on a png source to png without quality',
+      params: { url: href, quality: 10 },
+      source: 'png',
+      expect: { format: 'png' },
+    },
+    ...(['tiff', 'gif'] as const).map((source) => ({
+      name: `resolves an omitted format on a ${source} source to png without quality`,
+      params: { url: href, quality: 10 },
+      source,
+      expect: { format: 'png' as const },
+    })),
+    {
+      name: 'resolves an omitted format on a jpeg source to jpeg with its quality',
+      params: { url: href, quality: 10 },
+      source: 'jpeg',
+      expect: { format: 'jpeg', quality: 10 },
+    },
+    {
+      name: 'keeps an explicit format regardless of the source',
+      params: { url: href, format: 'webp', quality: 10 },
+      source: 'png',
+      expect: { format: 'webp', quality: 10 },
+    },
+  ];
+  for (const c of cases) {
+    it(c.name, () => {
+      expect(resolveEncoding(toSpec(c.params, defaults), c.source)).toStrictEqual(c.expect);
     });
   }
 });

@@ -923,9 +923,10 @@ would still claim a quality that means nothing. `quality: number | undefined`: t
 would need a fallback for a lossy format with none, which cannot happen. Normalizing
 `format=source` too: the key is formed before the fetch, when the output format is unknown.
 **Consequences:** A `format=source` request on a png, TIFF, or GIF source still keys on
-quality. CloudFront's cache key is the raw query string, so the edge still keeps one entry
-per `quality` value; each is filled by whichever instance serves it, and for `format=png`
-they now carry one ETag where they used to carry one per `quality`.
+quality; decision 60 drops it from that request's ETag. CloudFront's cache key is the raw
+query string, so the edge still keeps one entry per `quality` value; each is filled by
+whichever instance serves it, and for `format=png` they now carry one ETag where they used
+to carry one per `quality`.
 
 ## 59. Local-use NAT64 and Teredo are blocked whole; IPv4-translated addresses are read
 
@@ -950,3 +951,24 @@ more code to reach a deprecated tunnelling scheme no image host needs.
 **Consequences:** Any source reachable only through local-use NAT64 or Teredo is refused.
 The policy table's per-layout rows are replaced by whole-range rows, including addresses in
 each new range that passed before.
+
+## 60. The ETag drops quality once an omitted format resolves to png
+
+**Date:** 2026-10-04
+**Context:** Decision 58 dropped quality from the spec for `format=png`, but with `format`
+omitted the result-cache key is formed before the fetch, when the output format is unknown,
+so a png, TIFF, or GIF source still had one ETag per `quality` value for identical bytes.
+The ETag is computed after `loadSource`, when the sniffed type fixes the output.
+**Decision:** `resolveEncoding(spec, sourceType)` moves from a private step of the pipeline
+into `image/spec.ts`, with the source-to-output mapping, because the operation is its second
+caller. When it resolves a `format=source` spec to png, the operation computes the ETag over
+the key of the same spec with `format=png`, which has no quality. The result-cache key is
+unchanged. Approved by the author before implementation.
+**Rejected:** Resolving `format=source` in the ETag for every source: it would change the
+ETag of every format-omitted lossy response for no gain. Looking up the result cache after
+the fetch under a normalized key: it costs a fetch on every hit, which the cache exists to
+avoid.
+**Consequences:** A format-omitted png source and an explicit `format=png` request share an
+ETag, which is correct since their bytes are identical. The result cache still keeps one
+entry per `quality` value for such sources, and reports `miss` for a second quality. Each
+existing format-omitted png ETag changes once.

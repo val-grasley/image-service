@@ -101,9 +101,13 @@ describe('ETag', () => {
       format: 'png',
       pattern: 'quadrants',
     });
-    expect(await etagOf(solid)).toBe(expectedEtag(solid, `sha256:${sha256(solidBytes.bytes)}`));
+    // Both sources are png with format omitted, so the ETag is that of an explicit png.
+    const asPng = (params: ProcessParams): ProcessParams => ({ ...params, format: 'png' });
+    expect(await etagOf(solid)).toBe(
+      expectedEtag(asPng(solid), `sha256:${sha256(solidBytes.bytes)}`),
+    );
     expect(await etagOf(quadrants)).toBe(
-      expectedEtag(quadrants, `sha256:${sha256(quadrantBytes.bytes)}`),
+      expectedEtag(asPng(quadrants), `sha256:${sha256(quadrantBytes.bytes)}`),
     );
   });
 
@@ -149,6 +153,25 @@ describe('conditional requests', () => {
     expect(response.status).toBe(200);
   });
 
+  it('answers 304 for a format-omitted png source whose ETag came from another quality', async () => {
+    const harness = createHarness(fake);
+    const url = sourceUrl(fake, '/image/png');
+    const first = await harness.request(query('/process', { url, width: '30', quality: '10' }));
+    const etag = first.headers.get('etag') ?? '';
+    const response = await harness.request(query('/process', { url, width: '30', quality: '50' }), {
+      headers: { 'If-None-Match': etag },
+    });
+    expect(response.status).toBe(304);
+    expect(response.headers.get('etag')).toBe(etag);
+  });
+
+  it('keeps quality in the ETag for a format-omitted lossy source', async () => {
+    const url = sourceUrl(fake, '/image/jpeg');
+    const low = await etagOf({ url, width: 30, quality: 10 });
+    const high = await etagOf({ url, width: 30, quality: 90 });
+    expect(low).not.toBe(high);
+  });
+
   it('matches a weak tag, one entry of a list, and the wildcard', async () => {
     const harness = createHarness(fake);
     const etag = (await harness.request(path())).headers.get('etag') ?? '';
@@ -170,6 +193,18 @@ describe('X-Result-Cache', () => {
       'hit',
     ]);
     expect(second.headers.get('etag')).toBe(first.headers.get('etag'));
+  });
+
+  it('misses, as the key keeps quality, for a format-omitted png source differing only in quality', async () => {
+    const harness = createHarness(fake);
+    const url = sourceUrl(fake, '/image/png');
+    const low = await harness.request(query('/process', { url, width: '30', quality: '10' }));
+    const high = await harness.request(query('/process', { url, width: '30', quality: '90' }));
+    expect([low.headers.get('x-result-cache'), high.headers.get('x-result-cache')]).toEqual([
+      'miss',
+      'miss',
+    ]);
+    expect(high.headers.get('etag')).toBe(low.headers.get('etag'));
   });
 
   it('is a hit with the same ETag for a png request differing only in quality', async () => {

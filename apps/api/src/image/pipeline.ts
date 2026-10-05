@@ -2,7 +2,7 @@ import type { CropMode, OutputFormat, SourceInfo, SourceType } from '@image-serv
 import sharp, { type ResizeOptions, type Sharp } from 'sharp';
 import type { Config } from '../config.ts';
 import { ServiceError } from '../errors.ts';
-import type { TransformSpec } from './spec.ts';
+import { resolveEncoding, type Encoding, type TransformSpec } from './spec.ts';
 
 export type InspectResult = Pick<SourceInfo, 'format' | 'width' | 'height' | 'pages'>;
 
@@ -21,16 +21,6 @@ export const PIPELINE_REVISION = '1';
 export function pipelineVersion(): string {
   return `${sharp.versions.sharp}/${PIPELINE_REVISION}`;
 }
-
-const SOURCE_OUTPUT: Record<SourceType, OutputFormat> = {
-  jpeg: 'jpeg',
-  png: 'png',
-  webp: 'webp',
-  avif: 'avif',
-  tiff: 'png',
-  // GIF output would re-quantize the first frame with no benefit over PNG.
-  gif: 'png',
-};
 
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
@@ -66,7 +56,7 @@ export async function transform(
   spec: TransformSpec,
   limits: PipelineLimits,
 ): Promise<TransformResult> {
-  const target = encoding(spec, info);
+  const target = resolveEncoding(spec, info.format);
   const { format } = target;
   let image = sharp(bytes, { limitInputPixels: limits.maxInputPixels })
     .timeout({ seconds: limits.transformTimeoutSeconds })
@@ -110,16 +100,6 @@ function resizeOptions(crop: CropMode, format: OutputFormat): ResizeOptions {
         background: format === 'jpeg' ? WHITE : TRANSPARENT,
       };
   }
-}
-
-type Encoding = { format: 'png' } | { format: Exclude<OutputFormat, 'png'>; quality: number };
-
-function encoding(spec: TransformSpec, info: InspectResult): Encoding {
-  if (spec.format === 'png') {
-    return { format: 'png' };
-  }
-  const format = spec.format === 'source' ? SOURCE_OUTPUT[info.format] : spec.format;
-  return format === 'png' ? { format } : { format, quality: spec.quality };
 }
 
 function encode(image: Sharp, target: Encoding): Sharp {

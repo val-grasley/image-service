@@ -62,10 +62,11 @@ Parameters appear in this fixed order with defaults applied, so equivalent reque
 key. `q` is `-` for `format=png`: the spec carries no quality for lossless output, so
 requests differing only in `quality` share one key and one ETag (decision 58). It stays a
 number for `format=source`, because the key is formed before the source is fetched, when
-the output format is not yet known, so a source that resolves to png still keys on quality.
+the output format is not yet known, so a source that resolves to png still keys on quality
+and makes one result-cache entry per `quality` value; the ETag drops it (below).
 CloudFront's cache key is the raw query string, so the edge still keeps one entry per
-`quality` value; each such edge entry is filled by whichever instance serves it and, for
-`format=png`, carries the same ETag. The leading `v1` is bumped if the key format changes.
+`quality` value; each such edge entry is filled by whichever instance serves it and, when
+the output is png, carries the same ETag. The leading `v1` is bumped if the key format changes.
 `url` is the href as received, not the redirect target, so two source URLs that redirect to
 the same place are two entries; this is correct because their upstream validators may
 differ.
@@ -78,6 +79,11 @@ Strong, computed in `operations/process-image.ts`:
 etag = '"' + hex(sha256(cacheKey + '|' + pipelineVersion + '|' + sourceIdentity)).slice(0, 32) + '"'
 ```
 
+- `cacheKey` is the request's key, except when `format=source` resolves to png
+  (`resolveEncoding` in `image/spec.ts`, once the source is sniffed): then it is the key of
+  the same spec with `format=png`, which carries no quality. Requests whose output is png
+  therefore share an ETag across `quality` values, and a conditional request with another
+  quality's ETag gets 304 (decision 60).
 - `pipelineVersion` is `sharp.versions.sharp + '/' + PIPELINE_REVISION`, where
   `PIPELINE_REVISION` is a constant in `image/pipeline.ts` bumped whenever output for the
   same input changes (an encoder option, a crop semantics fix).

@@ -127,7 +127,7 @@ directory's statement.
 │   │   │   │   ├── sniff.ts      Content type from magic bytes.
 │   │   │   │   └── cache.ts      Short-TTL cache of fetched source bytes.
 │   │   │   ├── image/
-│   │   │   │   ├── spec.ts       TransformSpec: parsing, defaults, canonical form, cache key.
+│   │   │   │   ├── spec.ts       TransformSpec: parsing, defaults, canonical form, cache key, output encoding.
 │   │   │   │   └── pipeline.ts   Sole importer of sharp. TransformSpec + bytes → bytes + metadata.
 │   │   │   ├── cache/            ByteLru (shared by both caches), ResultCache interface and memory implementation.
 │   │   │   ├── rate-limit/       RateLimiter interface, memory and DynamoDB implementations, client key derivation.
@@ -370,9 +370,10 @@ chunked.
 
 ### ETag and conditional requests
 
-`ETag` is a strong hash over the canonical key, a pipeline version string (sharp's version
-plus a constant bumped on behavior changes), and the source identity: the upstream `ETag` or
-`Last-Modified` when present, else a hash of the source bytes. A conditional request is
+`ETag` is a strong hash over the canonical key (without quality once the output is known to
+be png, decision 60), a pipeline version string (sharp's version plus a constant bumped on
+behavior changes), and the source identity: the upstream `ETag` or `Last-Modified` when
+present, else a hash of the source bytes. A conditional request is
 answered 304 when the recomputed ETag matches. On a warm instance with the source or result
 cached this costs nothing; on a cold instance it costs a fetch and, without an upstream
 validator, a transform. A 304 therefore always saves bandwidth, always saves the transform
