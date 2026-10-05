@@ -20,7 +20,7 @@ type PipelineLimits = Pick<
   'maxInputPixels' | 'transformTimeoutSeconds' | 'maxOutputBytes' | 'maxAvifOutputPixels'
 >;
 
-export const PIPELINE_REVISION = '2';
+export const PIPELINE_REVISION = '3';
 
 export function pipelineVersion(): string {
   return `${sharp.versions.sharp}/${PIPELINE_REVISION}`;
@@ -76,6 +76,11 @@ export async function transform(
   let image = sharp(bytes, { limitInputPixels: limits.maxInputPixels })
     .timeout({ seconds: limits.transformTimeoutSeconds })
     .autoOrient();
+  if (format === 'jpeg') {
+    // The JPEG encoder drops alpha, which would leave transparent pixels their stored color,
+    // usually black.
+    image = image.flatten({ background: WHITE });
+  }
   if (spec.width !== undefined || spec.height !== undefined) {
     image = image.resize(spec.width, spec.height, resizeOptions(spec.crop, format));
   }

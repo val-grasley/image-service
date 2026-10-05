@@ -353,8 +353,6 @@ Next steps:
 
 Open design questions found during implementation:
 
-- **Transparent sources encoded as JPEG.** sharp drops alpha, so transparent pixels turn
-  black; flattening onto white before encoding is the likely fix.
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
 - **Smaller items.** With `format` omitted, a PNG, TIFF, or GIF source still makes one
   in-process result-cache entry per `quality`, since the key is formed before the fetch; its

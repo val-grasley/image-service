@@ -121,6 +121,32 @@ describe('transform resizing', () => {
   });
 });
 
+describe('transform transparency', () => {
+  it('flattens transparent pixels of a png onto white when encoding jpeg', async () => {
+    // Padding gives the png fully transparent bands above and below the quadrants.
+    const padded = await run(await quadrants(400, 200), { width: 400, height: 400, crop: 'pad' });
+    const source = { bytes: padded.bytes, format: padded.format };
+    const at = await pixels((await run(source, { format: 'jpeg' })).bytes);
+    expect((await pixels(padded.bytes))(200, 20)[3]).toBe(0);
+    for (const band of [at(200, 20), at(200, 380)]) {
+      expect(Math.min(...band)).toBeGreaterThanOrEqual(250);
+    }
+    const [red = 0, green = 0, blue = 0] = at(100, 150);
+    expect(red).toBeGreaterThanOrEqual(250);
+    expect(Math.max(green, blue)).toBeLessThanOrEqual(5);
+  });
+
+  it('blends half-transparent pixels with white when encoding jpeg', async () => {
+    const source = await generateImage({ width: 40, height: 20, format: 'png', alpha: true });
+    const [red = 0, green = 0, blue = 0, alpha = 0] = (await pixels(source.bytes))(20, 10);
+    const coverage = alpha / 255;
+    const blended = [red, green, blue].map((channel) => channel * coverage + 255 * (1 - coverage));
+    const at = await pixels((await run(source, { format: 'jpeg' })).bytes);
+    const deviation = at(20, 10).map((channel, index) => Math.abs(channel - (blended[index] ?? 0)));
+    expect(Math.max(...deviation)).toBeLessThanOrEqual(3);
+  });
+});
+
 describe('transform orientation', () => {
   it('applies the EXIF orientation and strips the tag', async () => {
     const source = await generateImage({

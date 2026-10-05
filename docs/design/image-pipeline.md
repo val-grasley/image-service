@@ -109,10 +109,15 @@ defaults to 1 when sharp omits it. A header sharp cannot parse throws
 2. `sharp(bytes, { limitInputPixels: maxInputPixels })` with `.timeout({ seconds })`.
    `transform` passes the limit itself so it is safe for any caller that skipped `inspect`.
 3. `.autoOrient()`: applies the EXIF orientation so later dimensions are the visual ones.
-4. Resize per the table below, only if `width` or `height` is set.
-5. Encode per the output table. Metadata is stripped because nothing calls
+4. `.flatten({ background: white })`, only when the output format is jpeg. The JPEG encoder
+   drops the alpha channel and keeps each pixel's stored color, so transparent pixels,
+   usually stored black, would turn black; flattening composites them onto white, matching
+   the `pad` background for jpeg. sharp flattens before it resizes whatever the call order,
+   and only an input with alpha is affected.
+5. Resize per the table below, only if `width` or `height` is set.
+6. Encode per the output table. Metadata is stripped because nothing calls
    `withMetadata()`.
-6. Check the byte length against `maxOutputBytes`; throw `output_too_large`.
+7. Check the byte length against `maxOutputBytes`; throw `output_too_large`.
 
 ### Resize mapping
 
@@ -185,6 +190,9 @@ change, and contains the href.
   source with width 400 returns 100 by 50; `pad` on png has transparent corners and on
   jpeg white ones.
 - One dimension: width 200 on 400 by 200 gives 200 by 100.
+- Transparency into jpeg: a png made by padding a `quadrants` source has fully transparent
+  bands that come out white, with the quadrant colors kept; a half-transparent `alpha`
+  source comes out as its color blended with white.
 - Orientation 6 source: output dimensions are the visual ones and the quadrant colors are
   rotated; output has no EXIF.
 - Each output format round-trips through `inspect`; `format: 'source'` on tiff and gif

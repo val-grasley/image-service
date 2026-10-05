@@ -1092,3 +1092,20 @@ on noise from the fixture generator with sharp 0.35.5: AVIF at effort 0 took 4.7
 plain libjpeg took 0.29 to 0.33 s at 16 MP. The 8 MP default leaves room for decode, resize,
 and a slower CPU share inside the 5 s budget; the measurements were not taken on Lambda, and
 a deployment with more CPU per request can raise the cap.
+
+## 65. Transparent sources are flattened onto white before a JPEG encode
+
+**Date:** 2026-10-04
+**Context:** JPEG has no alpha channel. sharp's JPEG encoder drops alpha and keeps each
+pixel's stored color, so a fully transparent pixel, commonly stored as black, came out
+black, and a half-transparent one came out at its full, unblended color.
+**Decision:** When the output format is jpeg, the pipeline calls
+`flatten({ background: white })`, compositing the image onto white before the encode. White
+matches the `pad` background already used for jpeg. `PIPELINE_REVISION` is bumped, since
+the output for a transparent source changes.
+**Rejected:** Flattening onto black or a caller-chosen color: black reproduces the defect, and
+a background parameter widens the contract for a case one default covers. Refusing
+transparent sources for jpeg output: the caller asked for a conversion that has a
+conventional answer.
+**Consequences:** A transparent PNG, WebP, AVIF, GIF, or TIFF converted to JPEG looks as it
+would on a white page. Outputs in formats with alpha are unchanged.
