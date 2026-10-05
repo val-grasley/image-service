@@ -526,20 +526,10 @@ logger setup, the request-id middleware, the loop-guard middleware, the esbuild 
 
 ## 11. Document status
 
-| Document | Status |
-|---|---|
-| `architecture.md`, `decisions.md` | Approved |
-| `design/url-policy-and-fetching.md` | Drafted, under review |
-| `design/fake-upstream.md` | Drafted, under review |
-| `design/http-api.md` | Drafted, under review |
-| `design/caching.md` | Drafted, under review |
-| `design/rate-limiting.md` | Drafted, under review |
-| `design/image-pipeline.md` | Drafted, under review |
-| `design/infrastructure.md` | Drafted, under review |
-| `design/observability.md`, `design/sdk.md`, `design/ui.md` | Drafted, under review |
-
-This document governs implementation once every design document above exists; each is
-approved in the commit that adds it.
+Every document is approved: `architecture.md` and `decisions.md` in the first commit, and
+each design document in the commit that added it. The design documents govern
+implementation, and a document change forced by the code rides in the same commit
+(AGENTS.md "Documents are the source of truth").
 
 ## 12. Next steps beyond this scope
 
