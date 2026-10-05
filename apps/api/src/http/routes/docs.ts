@@ -22,7 +22,7 @@ const EXPLANATIONS: Record<ErrorCode, string> = {
   unsupported_source_type:
     'Judged from its bytes, the source is not a JPEG, PNG, WebP, GIF, AVIF, or TIFF image, or it is one whose pixel data cannot be decoded, for example because the file is truncated.',
   output_too_large:
-    'The output would exceed a size limit: the byte limit once encoded, the per-side or total pixel limit for the dimensions a resize would produce, or the AVIF pixel limit for an AVIF output; request smaller dimensions or another format.',
+    'The output would exceed a size limit: the byte limit once encoded; the per-side or total pixel limit, which an output larger than the source on either axis must fit; or the AVIF pixel limit for an AVIF output. Request smaller dimensions or another format.',
   rate_limited:
     'This client sent more requests this minute than the limit allows; Retry-After says when to try again.',
   internal_error: 'The service failed unexpectedly; quote the requestId when reporting it.',

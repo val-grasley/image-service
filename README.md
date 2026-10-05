@@ -129,10 +129,11 @@ Key trade-offs, each with a decision-log entry:
 Any other parameter is a 400 `invalid_parameter` naming it, so `?widht=5` fails instead of
 returning the image untransformed; `/info` takes only `url`. Integers are plain decimal
 digits: `width=5`, not `05`, `5.0`, `5e0`, `+5`, or `0x5`. The dimension limits and default
-quality are configuration defaults. When `width` or `height` is given, the limits also hold
-for the size the resize will produce: a dimension derived from the aspect ratio past either
-limit is a 422. A request with neither returns the source at its own size, which
-`MAX_INPUT_PIXELS` already bounds; the AVIF cap applies to every AVIF output. Inputs are
+quality are configuration defaults. They also hold for the size the transform will produce:
+an output larger than the source on either axis must fit `MAX_OUTPUT_DIMENSION` and
+`MAX_OUTPUT_PIXELS`, else 422. An output no larger than the source, including any request
+without dimensions, is already bounded by `MAX_INPUT_PIXELS`; the AVIF cap applies to every
+AVIF output. Inputs are
 JPEG, PNG, WebP, GIF, AVIF, and TIFF; animated inputs contribute their first frame; SVG is
 refused (decision 14).
 
@@ -166,7 +167,7 @@ into `/docs`.
 | URL blocked by policy, including a blocked redirect hop or the loop marker | 403 | `url_not_allowed` |
 | Source exceeds `MAX_SOURCE_BYTES` or `MAX_INPUT_PIXELS` | 413 | `source_too_large` |
 | Source is not a supported image type, or cannot be decoded | 415 | `unsupported_source_type` |
-| Output exceeds `MAX_OUTPUT_BYTES`; a resize's computed size would exceed `MAX_OUTPUT_DIMENSION` or `MAX_OUTPUT_PIXELS`; or an AVIF output would exceed `MAX_AVIF_OUTPUT_PIXELS` | 422 | `output_too_large` |
+| Output exceeds `MAX_OUTPUT_BYTES`; an output larger than the source on either axis would not fit `MAX_OUTPUT_DIMENSION` and `MAX_OUTPUT_PIXELS`; or an AVIF output would exceed `MAX_AVIF_OUTPUT_PIXELS` | 422 | `output_too_large` |
 | Rate limited | 429 | `rate_limited` |
 | Upstream returned non-2xx, was unreachable, or refused the connection | 502 | `upstream_error` |
 | Too many redirects | 502 | `too_many_redirects` |
@@ -193,8 +194,8 @@ defaults are architecture section 8's, and the two change together.
 | `FETCH_TOTAL_TIMEOUT_MS` | 8000 | Budget for the whole redirect chain and body |
 | `MAX_REDIRECTS` | 3 | Enough for CDNs, not for loops |
 | `TRANSFORM_TIMEOUT_SECONDS` | 5 | sharp's timeout takes whole seconds; bounds decode plus encode |
-| `MAX_OUTPUT_DIMENSION` | 4096 | Larger outputs are a CPU attack, not a thumbnail. Checked on the request (400) and on a resize's computed output (422) |
-| `MAX_OUTPUT_PIXELS` | 16,000,000 (16 MP) | Caps the product of both dimensions, requested (400) and computed for a resize (422) |
+| `MAX_OUTPUT_DIMENSION` | 4096 | Larger outputs are a CPU attack, not a thumbnail. Checked on the request (400), and on the computed output when it is larger than the source on either axis (422) |
+| `MAX_OUTPUT_PIXELS` | 16,000,000 (16 MP) | Caps the product of both dimensions: requested (400), and computed when the output is larger than the source on either axis (422) |
 | `MAX_AVIF_OUTPUT_PIXELS` | 8,000,000 (8 MP) | sharp's timeout cannot stop the AVIF encoder; 8 MP at effort 0 encodes in about 2 s, inside the transform budget |
 | `MAX_OUTPUT_BYTES` | 10,000,000 bytes | Keeps delivery inside the Lambda streaming budget; a 16 MP PNG can exceed 30 MB |
 | `DEFAULT_QUALITY` | 80 | Conventional lossy default |

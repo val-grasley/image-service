@@ -1185,7 +1185,7 @@ of a scale crop (Cloudinary's `c_scale`, for one) keeps the aspect ratio.
 with that dimension. The ETag includes the revision, so an edge copy of an old output fails
 revalidation after a deploy and is replaced.
 
-## 68. The output limits hold for a resize's computed output size
+## 68. An output larger than the source must fit the output limits
 
 **Date:** 2026-10-04
 **Context:** Architecture section 7 bounds each output dimension by `MAX_OUTPUT_DIMENSION`
@@ -1195,24 +1195,29 @@ other from the aspect ratio, so an extreme source derives an arbitrarily large a
 4000 PNG with `crop=fill&width=4096` asks for 4096 by 4,096,000, which ran out the 5 s
 budget as `transform_timeout` for png and failed as 500 `internal_error` against the
 encoders' own size limits for webp and jpeg.
-**Decision:** When `width` or `height` is given, `transform` checks the dimensions
-`outputDimensions` computes before it opens the input: a side over `MAX_OUTPUT_DIMENSION`,
-then a product over `MAX_OUTPUT_PIXELS`. For avif it then checks the product against
-`MAX_AVIF_OUTPUT_PIXELS` (decision 64) whether or not a dimension was given. Each is 422
-`output_too_large`, decision 23's code for an output the service will not produce, widened
-as decision 64 widened it; the detail names the variable, the computed size, and the limit.
-The route's 400 for out-of-range requested parameters is unchanged. A request with neither
-dimension is exempt from the first two checks, by the author's ruling: its output is the
-source at its own size, which `MAX_INPUT_PIXELS` already bounds, so nothing is derived that
-could exceed the limits the way an aspect ratio can. The AVIF cap is not exempt, because its
-reason is encode time, which an unresized source costs as much as a resized one.
-**Rejected:** Holding a request without dimensions to the output limits too: it would refuse
-a plain format conversion of a 6000 by 4000 photograph that `MAX_INPUT_PIXELS` admits.
-Clamping the derived dimension to the limit: silently returns a different size than the
-aspect ratio promises. 400 `invalid_parameter`: the parameters are each valid, and the
-breach depends on the fetched source, which decision 23 reports as 4xx on the content rather
-than the request. Checking in the route: the source size is not known there.
-**Consequences:** Decision 27 sized the byte cap on outputs that stop at `MAX_OUTPUT_PIXELS`;
-that holds for every resize, while an unresized output can reach `MAX_INPUT_PIXELS` and is
+**Decision:** Before it opens the input, `transform` checks the dimensions
+`outputDimensions` computes. An output larger than the source on either axis must fit
+`MAX_OUTPUT_DIMENSION` on each side and then `MAX_OUTPUT_PIXELS` in total; an avif output
+must then fit `MAX_AVIF_OUTPUT_PIXELS` (decision 64) whatever its size against the source.
+Each breach is 422 `output_too_large`, decision 23's code for an output the service will not
+produce, widened as decision 64 widened it; the detail names the variable, the computed
+size, and the limit. The route's 400 for out-of-range requested parameters is unchanged. An
+output no larger than the source on both axes is exempt from the first two checks, by the
+author's ruling: it is at most the source's size, which `MAX_INPUT_PIXELS` already bounds,
+so no aspect ratio can have inflated it. That covers every request without dimensions and
+every `fit`. The AVIF cap is not exempt, because its reason is encode time, which an output
+the size of the source costs as much as an enlarged one.
+**Rejected:** Holding every output to the limits: refuses a plain format conversion of a
+6000 by 4000 photograph that `MAX_INPUT_PIXELS` admits. Exempting only requests without
+dimensions (the first form of this ruling): `fit` never enlarges, so `width=4096` on a 3000
+by 6000 JPEG would be refused for an output of 3000 by 6000 that the same request without
+`width` returns with 200. Clamping the derived dimension to the limit: silently returns a
+different size than the aspect ratio promises. 400 `invalid_parameter`: the parameters are
+each valid, and the breach depends on the fetched source, which decision 23 reports as 4xx
+on the content rather than the request. Checking in the route: the source size is not known
+there.
+**Consequences:** An output is now bounded by the larger of the output limits and the
+source's own size. Decision 27 sized the byte cap on outputs that stop at
+`MAX_OUTPUT_PIXELS`; an output no larger than its source can reach `MAX_INPUT_PIXELS` and is
 bounded by `MAX_OUTPUT_BYTES` alone, as before. The test configuration gains
 `MAX_AVIF_OUTPUT_PIXELS`, which it lacked.

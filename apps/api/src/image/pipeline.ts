@@ -73,8 +73,7 @@ export async function transform(
 ): Promise<TransformResult> {
   const target = resolveEncoding(spec, info.format);
   const { format } = target;
-  const resized = spec.width !== undefined || spec.height !== undefined;
-  const refusal = outputLimitBreach(outputDimensions(info, spec), resized, format, limits);
+  const refusal = outputLimitBreach(info, outputDimensions(info, spec), format, limits);
   if (refusal !== undefined) {
     throw new ServiceError('output_too_large', refusal);
   }
@@ -116,21 +115,22 @@ export async function transform(
 }
 
 // The route checks only the requested dimensions, and a resize can derive the other one from
-// the aspect ratio, so the output limits are checked again on the size it will produce.
-// Without a resize the output is the source, which MAX_INPUT_PIXELS already bounds (decision
-// 68). The AVIF cap bounds encode time rather than size, so it applies either way.
+// the aspect ratio, so the output limits are checked again on the size it will produce. An
+// output no larger than the source on either axis is exempt: MAX_INPUT_PIXELS already bounds
+// it (decision 68). The AVIF cap bounds encode time rather than size, so it always applies.
 function outputLimitBreach(
+  source: { width: number; height: number },
   { width, height }: { width: number; height: number },
-  resized: boolean,
   format: OutputFormat,
   limits: PipelineLimits,
 ): string | undefined {
   const pixels = width * height;
   const size = `${String(width)} by ${String(height)} (${String(pixels)} pixels)`;
-  if (resized && (width > limits.maxOutputDimension || height > limits.maxOutputDimension)) {
+  const enlarged = width > source.width || height > source.height;
+  if (enlarged && (width > limits.maxOutputDimension || height > limits.maxOutputDimension)) {
     return `The output would be ${size}; MAX_OUTPUT_DIMENSION allows at most ${String(limits.maxOutputDimension)} on each side; request smaller dimensions.`;
   }
-  if (resized && pixels > limits.maxOutputPixels) {
+  if (enlarged && pixels > limits.maxOutputPixels) {
     return `The output would be ${size}; MAX_OUTPUT_PIXELS allows at most ${String(limits.maxOutputPixels)}; request smaller dimensions.`;
   }
   // sharp's timeout cannot interrupt the AVIF encoder, so its time is bounded by pixel count.

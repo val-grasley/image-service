@@ -440,38 +440,61 @@ describe('GET /process output limits', () => {
     });
   }
 
-  it('refuses a resize whose output is above MAX_OUTPUT_PIXELS with 422', async () => {
+  it('refuses an enlarging resize whose output is above MAX_OUTPUT_PIXELS with 422', async () => {
     const { request } = createHarness(fake);
-    // fit never enlarges, so width 1000 keeps the 1000 by 1001 source as it is.
-    const url = sourceUrl(fake, '/image/png?w=1000&h=1001');
-    const response = await request(query('/process', { url, width: '1000' }));
+    const url = sourceUrl(fake, '/image/png?w=100&h=99');
+    const response = await request(query('/process', { url, crop: 'fill', width: '1024' }));
     expect(response.status).toBe(422);
     expect(problem.parse(await response.json())).toEqual({
       code: 'output_too_large',
       detail:
-        'The output would be 1000 by 1001 (1001000 pixels); MAX_OUTPUT_PIXELS allows at most 1000000; request smaller dimensions.',
+        'The output would be 1024 by 1014 (1038336 pixels); MAX_OUTPUT_PIXELS allows at most 1000000; request smaller dimensions.',
     });
   });
 
-  it('refuses a resize whose derived side is above MAX_OUTPUT_DIMENSION with 422', async () => {
+  it('refuses an enlarging resize whose derived side is above MAX_OUTPUT_DIMENSION with 422', async () => {
     const { request } = createHarness(fake);
-    const url = sourceUrl(fake, '/image/png?w=10&h=1025');
-    const response = await request(query('/process', { url, width: '10' }));
+    const url = sourceUrl(fake, '/image/png?w=100&h=200');
+    const response = await request(query('/process', { url, crop: 'fill', width: '600' }));
     expect(response.status).toBe(422);
-    expect(problem.parse(await response.json()).detail).toContain('MAX_OUTPUT_DIMENSION');
+    expect(problem.parse(await response.json()).detail).toBe(
+      'The output would be 600 by 1200 (720000 pixels); MAX_OUTPUT_DIMENSION allows at most 1024 on each side; request smaller dimensions.',
+    );
   });
 
-  it('accepts a resize whose output is exactly at MAX_OUTPUT_PIXELS and at MAX_OUTPUT_DIMENSION', async () => {
+  it('accepts an enlarging resize exactly at MAX_OUTPUT_PIXELS and at MAX_OUTPUT_DIMENSION', async () => {
     const { request } = createHarness(fake);
     const atPixels = await request(
-      query('/process', { url: sourceUrl(fake, '/image/png?w=1000&h=1000'), width: '1000' }),
+      query('/process', {
+        url: sourceUrl(fake, '/image/png?w=10&h=10'),
+        crop: 'fill',
+        width: '1000',
+      }),
     );
     const atDimension = await request(
-      query('/process', { url: sourceUrl(fake, '/image/png?w=10&h=1024'), width: '10' }),
+      query('/process', {
+        url: sourceUrl(fake, '/image/png?w=100&h=50'),
+        crop: 'scale',
+        width: '1024',
+      }),
     );
     expect([atPixels.status, atDimension.status]).toEqual([200, 200]);
     expect(await decoded(atPixels)).toEqual({ format: 'png', width: 1000, height: 1000 });
-    expect(await decoded(atDimension)).toEqual({ format: 'png', width: 10, height: 1024 });
+    expect(await decoded(atDimension)).toEqual({ format: 'png', width: 1024, height: 512 });
+  });
+
+  it('returns a resize no larger than the source with 200 even when the source is over the output limits', async () => {
+    const { request } = createHarness(fake);
+    // fit never enlarges, so each output is the source size, which MAX_INPUT_PIXELS bounds.
+    const overPixels = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png?w=1000&h=1001'), width: '1000' }),
+    );
+    const overDimension = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png?w=10&h=1025'), width: '10' }),
+    );
+    expect([overPixels.status, overDimension.status]).toEqual([200, 200]);
+    expect(await decoded(overPixels)).toEqual({ format: 'png', width: 1000, height: 1001 });
+    expect(await decoded(overDimension)).toEqual({ format: 'png', width: 10, height: 1025 });
   });
 
   it('returns a source above MAX_OUTPUT_PIXELS or wider than MAX_OUTPUT_DIMENSION at its own size when no dimension is given', async () => {
