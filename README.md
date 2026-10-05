@@ -355,9 +355,8 @@ Open design questions found during implementation:
   black; flattening onto white before encoding is the likely fix.
 - **Unknown query parameters are ignored.** `?widht=5` returns 200 untransformed, and extra
   parameters let callers mint unlimited CloudFront cache keys; a 400 would tighten this.
-- **The 403 detail names the resolved address.** Inside a VPC that would reveal internal DNS
-  answers; naming only the range would not. Separately, the IPv6 table could add SIIT
-  (`::ffff:0:0:0/96`) and Teredo (`2001::/32`) and block `64:ff9b:1::/48` outright.
+- **The IPv6 table could grow.** It could add SIIT (`::ffff:0:0:0/96`) and Teredo
+  (`2001::/32`) and block `64:ff9b:1::/48` outright.
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
 - **Smaller items.** A lossless output's cache key still varies with `quality`; a body
   truncated after a valid header maps to 500 rather than a 4xx; the OpenAPI document omits

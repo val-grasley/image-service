@@ -100,8 +100,10 @@ export function checkUrl(url: URL, previous: URL | undefined, policy: PolicyConf
     return deny('public_host', `Host ${host} is this service.`);
   }
   if (!exempt && isIP(host) !== 0) {
-    const range = matchedRange(host);
-    if (range !== undefined) {
+    const match = matchedRange(host);
+    if (match !== undefined) {
+      const range =
+        match.embedded === undefined ? match.range : `${match.range} (embedded ${match.embedded})`;
       return deny('blocked_literal', `Address ${host} is in blocked range ${range}.`);
     }
   }
@@ -120,18 +122,21 @@ export function checkAddresses(
   if (isExempt(host, effectivePort(url), policy.allowedHosts)) {
     return ALLOWED;
   }
+  // A detail never names the resolved address: inside a VPC that would hand any caller the
+  // internal DNS answer. The fetcher logs the addresses for operators.
   for (const address of addresses) {
     if (isIP(address) === 0) {
       return deny(
         'blocked_address',
-        `Host ${host} resolves to ${address}, which is not an IP address.`,
+        `Host ${host} resolves to something that is not an IP address.`,
       );
     }
-    const range = matchedRange(address);
-    if (range !== undefined) {
+    const match = matchedRange(address);
+    if (match !== undefined) {
+      const what = match.embedded === undefined ? 'an address' : 'an address embedding one';
       return deny(
         'blocked_address',
-        `Host ${host} resolves to ${address}, which is in blocked range ${range}.`,
+        `Host ${host} resolves to ${what} in blocked range ${match.range}.`,
       );
     }
   }
@@ -172,19 +177,19 @@ function blockedRange(
   return { range: `${network}/${String(prefix)}`, list };
 }
 
-function matchedRange(address: string): string | undefined {
+function matchedRange(address: string): { range: string; embedded?: string } | undefined {
   const family = isIP(address) === 6 ? 'ipv6' : 'ipv4';
   const direct = BLOCKED_RANGES.find(({ list }) => list.check(address, family));
   if (direct !== undefined) {
-    return direct.range;
+    return { range: direct.range };
   }
   if (family === 'ipv4') {
     return undefined;
   }
   for (const embedded of embeddedIpv4(address)) {
-    const range = matchedRange(embedded);
-    if (range !== undefined) {
-      return `${range} (embedded ${embedded})`;
+    const match = matchedRange(embedded);
+    if (match !== undefined) {
+      return { range: match.range, embedded };
     }
   }
   return undefined;

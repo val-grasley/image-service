@@ -28,11 +28,9 @@ function literal(host: string, range: string): Decision {
   return denied('blocked_literal', `Address ${host} is in blocked range ${range}.`);
 }
 
-function resolvesTo(host: string, address: string, range: string): Decision {
-  return denied(
-    'blocked_address',
-    `Host ${host} resolves to ${address}, which is in blocked range ${range}.`,
-  );
+function resolvesTo(host: string, range: string, embedding = false): Decision {
+  const what = embedding ? 'an address embedding one' : 'an address';
+  return denied('blocked_address', `Host ${host} resolves to ${what} in blocked range ${range}.`);
 }
 
 type UrlCase = { name: string; url: string; previous?: string; expect: Decision };
@@ -519,7 +517,7 @@ describe('checkUrl', () => {
   });
 });
 
-const blockedResolutions: [address: string, range: string][] = [
+const blockedResolutions: [address: string, range: string, embedding?: boolean][] = [
   ['0.0.0.1', '0.0.0.0/8'],
   ['10.0.0.1', '10.0.0.0/8'],
   ['100.64.0.1', '100.64.0.0/10'],
@@ -534,25 +532,25 @@ const blockedResolutions: [address: string, range: string][] = [
   ['::', '::/128'],
   ['::1', '::1/128'],
   ['::ffff:127.0.0.1', '127.0.0.0/8'],
-  ['::127.0.0.1', '127.0.0.0/8 (embedded 127.0.0.1)'],
-  ['64:ff9b::a00:1', '10.0.0.0/8 (embedded 10.0.0.1)'],
-  ['64:ff9b:1::a00:1', '10.0.0.0/8 (embedded 10.0.0.1)'],
-  ['2002:a00:1::', '10.0.0.0/8 (embedded 10.0.0.1)'],
+  ['::127.0.0.1', '127.0.0.0/8', true],
+  ['64:ff9b::a00:1', '10.0.0.0/8', true],
+  ['64:ff9b:1::a00:1', '10.0.0.0/8', true],
+  ['2002:a00:1::', '10.0.0.0/8', true],
   ['fc00::1', 'fc00::/7'],
   ['fe80::1', 'fe80::/10'],
   ['fe80::1%eth0', 'fe80::/10'],
-  ['2002:a00:1::%eth0', '10.0.0.0/8 (embedded 10.0.0.1)'],
+  ['2002:a00:1::%eth0', '10.0.0.0/8', true],
   ['fec0::1', 'fec0::/10'],
   ['ff02::1', 'ff00::/8'],
 ];
 
 describe('checkAddresses', () => {
   const cases: { name: string; url: string; addresses: string[]; expect: Decision }[] = [
-    ...blockedResolutions.map(([address, range]) => ({
-      name: `denies a public name resolving to ${address} in ${range}`,
+    ...blockedResolutions.map(([address, range, embedding]) => ({
+      name: `denies a public name resolving to ${address} in ${range}, naming only the range`,
       url: 'https://photos.example/a.jpg',
       addresses: [address],
-      expect: resolvesTo('photos.example', address, range),
+      expect: resolvesTo('photos.example', range, embedding),
     })),
     {
       name: 'allows a name resolving to public IPv4 and IPv6 addresses',
@@ -566,14 +564,14 @@ describe('checkAddresses', () => {
       addresses: ['photos.example'],
       expect: denied(
         'blocked_address',
-        'Host photos.example resolves to photos.example, which is not an IP address.',
+        'Host photos.example resolves to something that is not an IP address.',
       ),
     },
     {
       name: 'denies when one of several addresses is private',
       url: 'https://photos.example/a.jpg',
       addresses: ['203.0.113.10', '10.0.0.1', '203.0.113.11'],
-      expect: resolvesTo('photos.example', '10.0.0.1', '10.0.0.0/8'),
+      expect: resolvesTo('photos.example', '10.0.0.0/8'),
     },
     {
       name: 'allows a host:port entry to reach loopback on that port',
@@ -585,7 +583,7 @@ describe('checkAddresses', () => {
       name: 'denies a host:port entry on another port',
       url: 'http://127.0.0.1:4001/a.jpg',
       addresses: ['127.0.0.1'],
-      expect: resolvesTo('127.0.0.1', '127.0.0.1', '127.0.0.0/8'),
+      expect: resolvesTo('127.0.0.1', '127.0.0.0/8'),
     },
     {
       name: 'allows a portless entry on 443',
@@ -603,7 +601,7 @@ describe('checkAddresses', () => {
       name: 'denies a portless entry on a high port',
       url: 'https://internal.example:8443/a.jpg',
       addresses: ['10.0.0.5'],
-      expect: resolvesTo('internal.example', '10.0.0.5', '10.0.0.0/8'),
+      expect: resolvesTo('internal.example', '10.0.0.0/8'),
     },
     {
       name: 'allows a name:port entry on its port',
@@ -615,7 +613,7 @@ describe('checkAddresses', () => {
       name: 'denies a name:port entry on the default port',
       url: 'http://staging.example/a.jpg',
       addresses: ['10.0.0.6'],
-      expect: resolvesTo('staging.example', '10.0.0.6', '10.0.0.0/8'),
+      expect: resolvesTo('staging.example', '10.0.0.0/8'),
     },
   ];
 

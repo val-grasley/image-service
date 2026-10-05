@@ -230,6 +230,10 @@ change these rules.
 | IPv4 | `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.0.0.0/24`, `192.168.0.0/16`, `198.18.0.0/15`, `224.0.0.0/4`, `240.0.0.0/4` |
 | IPv6 | `::`, `::1`, `::/96` (deprecated IPv4-compatible, apply the IPv4 table), `::ffff:0:0/96` (IPv4-mapped, apply the IPv4 table), `64:ff9b::/96` and `64:ff9b:1::/48` (NAT64, apply the IPv4 table), `2002::/16` (6to4, apply the IPv4 table to the embedded address), `fc00::/7`, `fe80::/10`, `fec0::/10`, `ff00::/8` |
 
+A denial by these rules names the hostname and the range that matched in the problem's
+`detail`, never the resolved address, which inside a VPC would disclose internal DNS
+answers (decision 57). The fetcher's debug log carries the addresses.
+
 ### Connection rules
 
 - DNS is resolved once per hop by the fetcher. Every returned address is checked, and one

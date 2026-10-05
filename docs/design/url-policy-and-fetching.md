@@ -41,9 +41,13 @@ name, `PUBLIC_HOSTS`, IP literal, downgrade. The first failing rule is the repor
 `ALLOWED_HOSTS` is consulted before the port and IP-literal rules, with the exemption
 semantics in section 5.
 
-`checkAddresses` applies the address rules to every address; one blocked address denies
-with that address in `detail`, and so does a string that is not an IP address, since the
-fetcher could not connect to it as checked. `ALLOWED_HOSTS` exempts the host from this check.
+`checkAddresses` applies the address rules to every address; one blocked address denies,
+and so does a string that is not an IP address, since the fetcher could not connect to it as
+checked. `ALLOWED_HOSTS` exempts the host from this check. Its `detail` names the hostname
+and the range that matched (for an embedding prefix, the IPv4 range of the embedded
+address), never the resolved address or the embedded one, because inside a VPC that would
+hand any caller an internal DNS answer (decision 57). An IP-literal denial from `checkUrl`
+names the literal, which is the caller's own input.
 
 **Range checks** use `node:net` `BlockList`, built once per process from the two tables in
 section 5, one `BlockList` per range so that `detail` can name the range that matched. IPv4
@@ -177,7 +181,9 @@ safe because the entry was admitted by the policy and cannot outlive the TTL.
 
 On denial: `info` with `hostname` and `reason`. On fetch: `info` with `hostname`, final
 hostname if different, `upstreamStatus`, `bytes`, `hops`, `durationMs`. Resolved addresses
-only at `debug`. Never the full URL.
+only at `debug`, in a `source resolved` line with `hostname` and `addresses`, which is where
+an operator finds the address behind an address denial, since the problem's `detail` omits
+it. Never the full URL.
 
 ## Test table
 
@@ -198,7 +204,8 @@ expectation. Required rows, grouped:
   layouts per layout, and one public in all four, which passes.
 - **Addresses:** a public name resolving to one address in each blocked range; one public
   plus one private address denies; a zone-indexed address in an embedding prefix is judged by
-  its embedded address; a resolution that is not an IP address denies; `ALLOWED_HOSTS` with
+  its embedded address; each denial's `detail` names the range and not the address; a
+  resolution that is not an IP address denies; `ALLOWED_HOSTS` with
   port reaching `127.0.0.1:<port>` and denied at `127.0.0.1:<other>`; without a port,
   allowed on 443 and denied on a high port.
 - **Downgrade:** `https` previous hop to `http` current denied; `http` to `https` allowed.

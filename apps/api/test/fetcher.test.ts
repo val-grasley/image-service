@@ -121,7 +121,17 @@ describe('redirects', () => {
       );
     });
     expect(error?.code).toBe('url_not_allowed');
-    expect(error?.detail).toContain('10.0.0.1');
+    expect(error?.detail).toBe(
+      'Host internal.example resolves to an address in blocked range 10.0.0.0/8.',
+    );
+    expect(logEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'debug',
+        msg: 'source resolved',
+        hostname: 'internal.example',
+        addresses: '10.0.0.1',
+      }),
+    );
     expect(resolve).toHaveBeenCalledWith('internal.example');
     expect(sockets).toBe(1);
     expect(fake.connections()).toHaveLength(1);
@@ -291,7 +301,15 @@ describe('addresses', () => {
     });
     expect(error?.code).toBe('url_not_allowed');
     expect(error?.detail).toBe(
-      'Host internal.example resolves to 127.0.0.1, which is in blocked range 127.0.0.0/8.',
+      'Host internal.example resolves to an address in blocked range 127.0.0.0/8.',
+    );
+    expect(logEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'debug',
+        msg: 'source resolved',
+        hostname: 'internal.example',
+        addresses: '127.0.0.1',
+      }),
     );
     expect(resolve).toHaveBeenCalledOnce();
     expect(sockets).toBe(0);

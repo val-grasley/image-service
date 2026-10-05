@@ -875,3 +875,26 @@ surface to methods the service never accepts.
 **Consequences:** Clients of the deployed service see CloudFront's 403 (not problem
 details) for unsupported methods. The OpenAPI document's 405 responses describe the
 service, not the edge.
+
+## 57. An address denial names the blocked range, not the resolved address
+
+**Date:** 2026-10-04
+**Context:** `design/url-policy-and-fetching.md` had `checkAddresses` deny with the blocked
+address in `detail`, and the 403 problem carried that detail to the caller. Inside a VPC,
+where names resolve to internal addresses, that hands any caller the internal DNS answer for
+any name it chooses. An embedding-prefix address leaked the same way through the embedded
+IPv4 address the detail named. The architecture's own example detail already named only the
+category.
+**Decision:** An address denial's detail names the hostname and the range that matched, and
+for an embedding prefix says the address embeds one in that IPv4 range, without naming
+either address. A resolution that is not an IP address is described as such without quoting
+it. The addresses stay in the fetcher's `source resolved` debug line. An IP-literal denial
+still names the literal and its embedded address, since both come from the URL the caller or
+the upstream's `Location` supplied, not from DNS. Approved by the author before
+implementation.
+**Rejected:** A category word alone ("a private address"): the range is no more revealing
+than the category and tells a caller which rule fired. Moving the address into the `info`
+denial line: the design keeps resolved addresses at `debug`, and the denial line would then
+log what the debug line already does.
+**Consequences:** An operator finding which address was denied sets `LOG_LEVEL=debug` or
+reads the range from the detail. The policy table's expected details changed with this entry.
