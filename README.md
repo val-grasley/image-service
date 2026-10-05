@@ -98,12 +98,12 @@ lying content types, SVG, HTML, truncated files, any status, and validators. No 
 checked in.
 
 Known gaps: the transform timeout is not provoked, since sharp's whole-second granularity
-makes a reliable trigger slow or flaky, so its mapping is tested on sharp's error (decision
-33); the fetcher's connect timeout, and the deadline tearing down a connection attempt in
-progress, have no hermetic test, since a loopback connect cannot be made to hang; the
-https-to-http downgrade is tested in the policy table but not through the fetcher, which
-needs an HTTPS fake upstream (decision 40); and the CDK bundling recipe is untested, since
-the template test skips bundling.
+makes a reliable trigger slow or flaky, so its mapping is tested on sharp's error; the
+fetcher's connect timeout, and the deadline tearing down a connection attempt in progress,
+have no hermetic test, since a loopback connect cannot be made to hang; the https-to-http
+downgrade is tested in the policy table but not through the fetcher, which needs an HTTPS
+fake upstream; and the CDK bundling recipe is untested, since the template test skips
+bundling.
 
 ## Live URL and deployment
 
@@ -155,7 +155,8 @@ Each new function version invalidates `/docs*` and `/openapi.json`. The environm
    `OPTIONS /process` with `Origin` and `Access-Control-Request-*` headers gets 204 from the
    function with `Access-Control-Allow-Headers: If-None-Match,X-Request-Id` and
    `Access-Control-Max-Age: 600`, and a `POST` still gets CloudFront's 403. The first
-   deployment answered the preflight with that 403 too, which is what decision 70 fixed.
+   deployment answered the preflight with that 403 too; the fix was to pass `OPTIONS`
+   through the edge and have the service name the request headers it allows.
 
 Encode times on Lambda (1536 MB, arm64), measured through the distribution on a cache miss:
 an 8 MP AVIF at the cap in 1.6 s, a 16 MP JPEG in 1.5 s, and a 16 MP WebP in 3.1 s, all
@@ -180,9 +181,77 @@ directory's responsibility.
 Built: the API with `crop=fit|fill|scale|pad` and `format=jpeg|png|webp|avif`, a UI, a typed
 SDK and an OpenAPI document (the two bonuses taken), an SSRF-safe fetch policy, limits on
 every resource, per-client rate limiting, edge and in-process caching, RFC 9457 errors, and
-a CDK deployment reproducible from the repository. Bonuses not taken (decision 17): video
-thumbnails (decision 16), `format=auto` (decision 24), CI, metrics, and extra
-transformations such as rotate and blur.
+a CDK deployment reproducible from the repository. Bonuses not taken: video thumbnails,
+`format=auto`, CI, metrics, and extra transformations such as rotate and blur.
+
+### Why these technologies
+
+The decision log records each choice with what was rejected; the reasons that mattered most
+are here.
+
+**TypeScript on Node 24.** libvips does the heavy work whatever the language calls it from,
+so Go or Rust would buy little speed, and one language lets the SDK, API, UI, and
+infrastructure share types: the SDK's parameter types are the source of truth for the API's
+validation schemas, checked at the type level.
+
+**Lambda behind CloudFront.** The workload fits a function: stateless, bursty, CPU-bound for
+a fraction of a second per request, and idle most of the time, so it scales to zero and,
+with CloudFront, sits inside AWS's permanent free tiers at this scale; an always-on
+container would not. One invocation per request makes isolation a platform guarantee: a 50
+MP decode cannot starve a neighbor, and the function's memory and timeout are a backstop
+behind the in-process budgets. It is the shape of AWS's Dynamic Image Transformation
+solution, sharp in a function behind CloudFront; this design puts a streaming Function URL
+in place of API Gateway. The fit has costs: instance memory is private and short-lived, so
+CloudFront, driven by `Cache-Control` and a strong `ETag`, is the real result cache and rate
+limiting needs a shared store; cold starts exist and are described under deployment.
+Rejected: Fargate and App Runner, which are not free and fit a bursty workload worse as
+always-on containers; Lambda@Edge, which has no environment variables, no response
+streaming, and a 1 MB cap on generated bodies; Render, whose free tier sleeps; and Fly.io,
+which no longer has a free tier.
+
+**DynamoDB for rate-limit counters.** AWS WAF rate rules are the proper production tool but
+not free, and API Gateway throttles per API key rather than per IP. An on-demand table with
+one atomic `ADD` per request costs cents at this volume, and a memory implementation of the
+same interface serves local runs and tests.
+
+**CDK.** Half of this stack is CloudFront, S3, and origin access control, which SAM leaves
+to raw CloudFormation. CDK's `NodejsFunction` bundling has a hook for the riskiest part of
+the deploy, installing sharp's linux-arm64 binaries into the asset. It synthesizes without
+credentials, so the template's load-bearing settings are asserted in the same test suite as
+the code, and the infrastructure is under two hundred lines of TypeScript in the same
+workspace. Terraform is equally credible but needs a state backend before the first deploy
+and offers nothing for bundling.
+
+**Hono.** It is built on the web-standard `Request` and `Response`, so the same app object
+runs locally, on Lambda, and in tests with no translation layer, and `@hono/zod-openapi`
+turns the route schemas into the OpenAPI document. Fastify is built on Node's request and
+response objects, so each environment needs an adapter and in-process tests go through
+`inject`; Express has no first-class typing or OpenAPI.
+
+**sharp.** libvips is fast, reads every needed format, reports dimensions from the header
+without decoding, and exposes `limitInputPixels` and a processing `timeout`, which are the
+input and time bounds the safeguards rely on. Jimp is pure JavaScript and far slower;
+ImageMagick in a child process is a larger attack surface and harder to bound. The price is
+platform-specific binaries, which the bundling hook installs.
+
+**No UI framework.** The UI is one interactive page whose job is to make the API legible,
+and its state is small: form values, a phase, a source description, and a result or a
+problem. A framework's declarative rendering is the right discipline for the loading, empty,
+and error states the brief asks for, and the same discipline fits in plain TypeScript: one
+state object and one render function. That is somewhat more code than React would need, and
+none of it is framework code, so the SDK is exercised with no framework assumptions. esbuild
+bundles it and is already a dev dependency because CDK's bundling uses it. Vite's dev server
+and asset pipeline would go unused for one page, and Astro is built for mostly static pages
+with interactive islands, the opposite of this one.
+
+**Few runtime dependencies.** Nine in the API, not counting the workspace SDK, each pinned
+and each with a recorded reason, and none in the SDK itself. `undici` is used instead of
+Node's global `fetch` because `fetch` follows redirects and decompresses automatically,
+which would bypass the per-hop policy and the byte cap, while `undici.request` returns raw
+responses and exposes the connector `lookup` that pins the connection to the checked
+addresses. The logger and the sniffer are under eighty lines each rather than packages.
+
+### How it works
 
 `GET /process` runs: request ID, loop guard, rate limit, validation, URL rules, result cache,
 fetch (or source cache), sniff, pixel bound, conditional check, transform, store, respond.
@@ -220,19 +289,16 @@ renderer that builds the page once and updates it, and API calls only through th
 shows the source and processed images with metadata, the request URL and a curl line, and any
 problem with its code and request ID. API text reaches the DOM through `textContent` only.
 
-**Key trade-offs**, each with a decision-log entry:
+### Key trade-offs
 
-- **Lambda behind CloudFront.** Inside free tiers at this scale, apart from cents of DynamoDB,
-  but memory is per instance, so CloudFront driven by `Cache-Control` and a strong `ETag` is
-  the real result cache, and rate limiting needs DynamoDB (decisions 2, 11, 12).
 - **Buffer, then deliver.** ETags, caching, and header-only dimension checks need the whole
-  source; streaming is used only to pass Lambda's 6 MB buffered limit (decision 13).
-- **`fit` by default.** Never crops or enlarges unless asked, so 500 by 300 may return 500 by
-  281 (decision 8).
-- **Status codes.** 403 for a policy refusal keeps 400 for "fix your parameters"; 413 and 415
-  describe fetched content, as image proxies conventionally use them (decisions 9, 23).
+  source; streaming is used only to pass Lambda's 6 MB buffered limit.
+- **`fit` by default.** Never crops or enlarges unless asked, so 500 by 300 may return 500
+  by 281.
+- **Status codes.** 403 for a policy refusal keeps 400 for "fix your parameters"; 413 and
+  415 describe fetched content, as image proxies conventionally use them.
 - **No API key.** The UI would have to embed it and it would break edge cache sharing. The
-  service is an open proxy bounded by rate limiting and reserved concurrency (decision 29).
+  service is an open proxy bounded by rate limiting and reserved concurrency.
 
 ## Limits and safeguards
 
@@ -264,17 +330,17 @@ startup with a message naming the variable.
 | `RATE_LIMIT_TABLE` | none | Required when the backend is `dynamodb` |
 | `CLIENT_IP_SOURCE` | `socket` | `socket`, `x-forwarded-for`, or `cloudfront` |
 | `TRUSTED_PROXY_COUNT` | 0 | Used by `x-forwarded-for` mode |
-| `PUBLIC_HOSTS` | empty | This service's own hostnames, refused as fetch targets. Empty in the default deployment (decision 26) |
+| `PUBLIC_HOSTS` | empty | This service's own hostnames, refused as fetch targets. Empty in the default deployment |
 | `ALLOWED_HOSTS` | empty | Exact `host[:port]` entries exempt from the IP-literal, address, and (with a port) port rules |
 | `LOG_LEVEL` | `info` | |
 | `PORT` | 3000 | Local server only |
 
 The Lambda has 1536 MB, a 20 s timeout, and reserved concurrency 10. The timeout covers the
 worst case of an 8 s fetch, a 5 s transform, and about 2 s to stream 10 MB, so an exceeded
-budget is a shaped 504 or 500 rather than a platform kill. sharp's timeout does not interrupt
-the AVIF or mozjpeg encoders, so AVIF encodes at effort 0 under `MAX_AVIF_OUTPUT_PIXELS` and
-JPEG uses plain libjpeg; measured single-threaded on noise, 8 MP of AVIF takes about 2 s and
-16 MP of JPEG about 0.3 s (decision 64).
+budget is a shaped 504 or 500 rather than a platform kill. sharp's timeout does not
+interrupt the AVIF or mozjpeg encoders, so AVIF encodes at effort 0 under
+`MAX_AVIF_OUTPUT_PIXELS` and JPEG uses plain libjpeg; measured single-threaded on noise, 8
+MP of AVIF takes about 2 s and 16 MP of JPEG about 0.3 s.
 
 **Fetch policy (SSRF).** Every outbound request goes through `source/fetcher.ts`, with no
 exception for trusted hosts. Before any network activity the URL must be `http` or `https` on
@@ -297,9 +363,8 @@ Rules and test table:
 **Self-fetch.** Two guards stop the service fetching itself. The production guard is a
 marker: the fetcher sends `X-Image-Service-Fetch: 1` on every request and the API refuses
 requests carrying it. `PUBLIC_HOSTS` adds the service's own names when they are known before
-deploy (decision 26).
-The Lambda also runs outside any VPC, a second layer rather than a replacement, since the
-Lambda Runtime API listens on loopback.
+deploy. The Lambda also runs outside any VPC, a second layer rather than a replacement,
+since the Lambda Runtime API listens on loopback.
 
 **Content hygiene.** Upstream `Content-Type` is never trusted and upstream headers are never
 forwarded; the sniffer decides the type from magic bytes, and SVG is refused. Every output
@@ -318,21 +383,21 @@ cache skip work on warm instances. A source-cache hit skips the fetcher's addres
 checks (the URL rules still run first), which is safe because the entry was admitted by the
 policy and cannot outlive its TTL.
 
-**Rate limiting.** A fixed one-minute window per client: one atomic DynamoDB `ADD` per request
-in production, a map locally. A fixed window admits up to twice the limit across a boundary,
-accepted because the limit bounds abuse rather than meters use (decision 32). It applies to
+**Rate limiting.** A fixed one-minute window per client: one atomic DynamoDB `ADD` per
+request in production, a map locally. A fixed window admits up to twice the limit across a
+boundary, accepted because the limit bounds abuse rather than meters use. It applies to
 `/process` and `/info`, counts invalid requests, and never sees CloudFront cache hits. Only
 429s carry `Retry-After`, `RateLimit`, and `RateLimit-Policy`, so a cached 200 never carries
 another client's values. In production the client IP is `CloudFront-Viewer-Address`,
 trustworthy because the Function URL accepts only CloudFront's signed requests;
 `x-forwarded-for` mode counts from the right, never the client-controlled leftmost entry. An
-undeterminable client falls into one shared bucket, which fails closed. If DynamoDB errors or
-exceeds 500 ms the request is allowed and the failure logged, since reserved concurrency
+undeterminable client falls into one shared bucket, which fails closed. If DynamoDB errors
+or exceeds 500 ms the request is allowed and the failure logged, since reserved concurrency
 already caps the damage. Per-IP in-flight requests are not capped.
 
 ## Next steps
 
-Not built, with reasons in the decision log: video thumbnails (decision 16 describes the
+Not built, with reasons in the decision log: video thumbnails (the log describes the
 constrained ffmpeg design if added), SVG input, `format=auto`, streaming transforms,
 authentication and signed URLs, persistent result storage, CI, and metrics.
 
@@ -348,14 +413,14 @@ With more time:
 - CloudWatch metrics (latency, cache hit rate, error rate) via Embedded Metric Format with a
   small dimension set, and a retention period on the function's log group, currently unset.
 - A custom domain and ACM certificate, which allow a TLS 1.2 minimum and setting
-  `PUBLIC_HOSTS` before deploy (decision 26).
+  `PUBLIC_HOSTS` before deploy.
 
 Open design questions found during implementation:
 
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
 - **Smaller items.** With `format` omitted, a PNG, TIFF, or GIF source still makes one
   in-process result-cache entry per `quality`, since the key is formed before the fetch; its
-  ETag and conditional requests do not vary (decisions 58 and 60).
+  ETag and conditional requests do not vary.
 
 ## API reference
 
@@ -382,7 +447,7 @@ an output larger than the source on either axis must fit `MAX_OUTPUT_DIMENSION` 
 `MAX_OUTPUT_PIXELS`, else 422. An output no larger than the source, including any request
 without dimensions, is already bounded by `MAX_INPUT_PIXELS`; the AVIF cap applies to every
 AVIF output. Inputs are JPEG, PNG, WebP, GIF, AVIF, and TIFF; animated inputs contribute
-their first frame; SVG is refused (decision 14).
+their first frame; SVG is refused.
 
 Image responses carry `Content-Type`, `ETag`, `Cache-Control: public, max-age=3600`,
 `X-Image-Width`, `X-Image-Height`, `X-Image-Format`, `X-Result-Cache` (`hit` or `miss`,
