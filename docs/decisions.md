@@ -1122,13 +1122,24 @@ sources: a JPEG cut in half fails with `VipsJpeg: premature end of JPEG image` (
 with `vipspng: libpng read error`, corrupt JPEG data with `VipsJpeg: Corrupt JPEG data: ...`
 and other libjpeg texts, corrupt WebP with `webp2vips: unable to read pixels`, corrupt GIF
 with `gifload_buffer: Invalid frame data`, a truncated TIFF with `tiff2vips: ...`, and a
-truncated AVIF with `source: bad seek to <n>` before libheif's line. sharp errors carry no
+truncated AVIF with `source: bad seek to <n>` before libheif's line. A corrupt TIFF, whose
+JPEG-compressed strips libtiff reports as warnings, fails under png output with only
+`vips2png: unable to write to target target`: sharp writes its failOn line only when the
+failing operation gave no message of its own, and here the PNG saver's error does, so the
+escalated warning reaches the caller only as a `warning` event on the sharp instance
+(`sharp/dist/constructor.mjs`, emitted before the promise rejects). sharp errors carry no
 code, only the message.
 **Decision:** Map to 415 `unsupported_source_type`, decision 23's convention for fetched
 content the service cannot use. The key is the libvips error domain that starts the first
-line: the loaders of the six accepted types (`VipsJpeg`, `vipspng`, `webp2vips`,
+line: the loaders of five of the six accepted types (`VipsJpeg`, `vipspng`, `webp2vips`,
 `gifload_buffer`, `tiff2vips`) and libvips's input `source`, plus sharp's own first line
-`Warning treated as error due to failOn setting`. Domains are fixed identifiers in libvips
+`Warning treated as error due to failOn setting`. AVIF's loader domain, `heif`, is left out
+because it could not be shown to be the loader's alone (libheif's errors on the save path may
+carry it too) and it never appeared first; a damaged AVIF reports
+`source` first. A rejection is also mapped to 415 when the instance emitted a libvips
+warning before it, which covers the TIFF case; the timeout and the pixel limit are matched
+first, so they keep their codes whatever was warned, and a warning on a transform that
+succeeds changes nothing. Domains are fixed identifiers in libvips
 rather than prose, and the libjpeg and libpng texts after them vary too much to list. The
 pipeline tests provoke a real failure for every listed domain, so an upgrade that renames
 one fails the suite instead of falling back to 500 silently.
@@ -1140,7 +1151,8 @@ transform budget. A new error code: the caller's remedy, a different source, is 
 for an unsupported type.
 **Consequences:** libvips shares the `VipsJpeg` and `vipspng` domains between its JPEG and
 PNG loaders and savers, so a failure inside libjpeg or libpng while encoding would also read
-as 415; the probes found none on pixels that had decoded. Some corrupt TIFFs fail with only the encoder's line
-(`vips2png: unable to write to target target`) and stay 500. `/info` reads only the header,
+as 415; the probes found none on pixels that had decoded. A warning raised outside the
+loader before an unrelated failure would read as 415 too; every warning the probes saw came
+from a damaged source. `/info` reads only the header,
 so it still describes such a source with 200. The fake upstream gains
 `/truncated-pixels/:format` for the integration test.

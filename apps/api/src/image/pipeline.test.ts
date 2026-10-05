@@ -346,10 +346,43 @@ describe('transform on a source that passes inspect but cannot be decoded', () =
       );
     });
   }
+
+  it('maps a corrupt tiff whose only failure report is a warning to unsupported_source_type', async () => {
+    // libtiff reports corrupt JPEG-compressed strips as warnings; under the default png output
+    // the PNG saver's error replaces sharp's failOn line, so only the warning event remains.
+    // A noise source would vary per run and sometimes fail through a tiff2vips line instead.
+    const image = await generateImage({
+      width: 300,
+      height: 200,
+      format: 'tiff',
+      pattern: 'quadrants',
+    });
+    const bytes = corruptedAt(1)(image.bytes);
+    const info = await inspect(bytes, 'tiff');
+    const spec = toSpec({ url: 'https://images.example/source' }, { quality: 80 });
+    const refused = transform(bytes, info, spec, limits);
+    await expect(refused).rejects.toMatchObject({ code: 'unsupported_source_type' });
+    await expect(refused).rejects.toHaveProperty(
+      'cause.message',
+      'vips2png: unable to write to target target',
+    );
+  });
+});
+
+describe('transform on a source that warns but decodes', () => {
+  it('returns the image when libvips warns about an ancillary chunk', async () => {
+    const image = await generateImage({ width: 40, height: 20, format: 'png' });
+    const bytes = Uint8Array.from(image.bytes);
+    // A flipped byte in the pHYs chunk's data fails its CRC, which libpng reports as a warning.
+    const data = Buffer.from(bytes).indexOf('pHYs') + 4;
+    bytes[data] = (bytes[data] ?? 0) ^ 0xff;
+    const result = await run({ bytes, format: 'png' }, { width: 20 });
+    expect([result.format, result.width, result.height]).toEqual(['png', 20, 10]);
+  });
 });
 
 describe('fromSharpError', () => {
-  const cases: { name: string; error: unknown; code: ServiceError['code'] }[] = [
+  const cases: { name: string; error: unknown; warned?: boolean; code: ServiceError['code'] }[] = [
     { name: 'a bare timeout', error: new Error('timeout: 0% complete'), code: 'transform_timeout' },
     {
       name: 'a timeout followed by the libvips kill notice',
@@ -433,10 +466,28 @@ describe('fromSharpError', () => {
       error: new Error('vips2png: unable to write to target target\nVipsJpeg: out of memory'),
       code: 'internal_error',
     },
+    {
+      name: 'an encoder failure after a libvips warning',
+      error: new Error('vips2png: unable to write to target target'),
+      warned: true,
+      code: 'unsupported_source_type',
+    },
+    {
+      name: 'a timeout after a libvips warning',
+      error: new Error('timeout: 43% complete\nVipsImage: killed for image "temp-97"'),
+      warned: true,
+      code: 'transform_timeout',
+    },
+    {
+      name: 'the pixel limit after a libvips warning',
+      error: new Error('Input image exceeds pixel limit'),
+      warned: true,
+      code: 'source_too_large',
+    },
   ];
   for (const c of cases) {
     it(`maps ${c.name} to ${c.code} and keeps it as the cause`, () => {
-      const mapped = fromSharpError(c.error);
+      const mapped = fromSharpError(c.error, c.warned ?? false);
       expect(mapped).toBeInstanceOf(ServiceError);
       expect([mapped.code, mapped.cause]).toEqual([c.code, c.error]);
     });

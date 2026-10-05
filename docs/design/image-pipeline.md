@@ -81,7 +81,7 @@ function pipelineVersion(): string; // `${sharp.versions.sharp}/${PIPELINE_REVIS
 
 function inspect(bytes: Uint8Array, type: SourceType): Promise<InspectResult>;
 function transform(bytes: Uint8Array, info: InspectResult, spec: TransformSpec, limits: PipelineLimits): Promise<TransformResult>;
-function fromSharpError(error: unknown): ServiceError; // exported so the mapping is testable in isolation
+function fromSharpError(error: unknown, warned: boolean): ServiceError; // exported so the mapping is testable in isolation
 ```
 
 `PipelineLimits` is the slice of `Config` with `maxInputPixels`, `transformTimeoutSeconds`,
@@ -169,14 +169,20 @@ sharp's timeout surfaces as an `Error` whose message starts with the line
 maps to `source_too_large`. A source whose header `inspect` read but whose pixel data
 fails to decode, such as a truncated or corrupt file, maps to `unsupported_source_type`
 (decision 66). libvips starts each error message with the domain that raised it, so the
-match is on the first line starting with the domain of a loader for an accepted type or of
-libvips's input source, observed with sharp 0.35.5 as `VipsJpeg: ` (for example
+match is on the first line starting with the domain of a loader for five of the six accepted
+types or of libvips's input source (AVIF's `heif` domain is left out, since it could not be
+shown to be the loader's alone; a damaged AVIF reports `source` first), observed with sharp 0.35.5 as `VipsJpeg: ` (for example
 `VipsJpeg: premature end of JPEG image`), `vipspng: ` (`vipspng: libpng read error`),
 `webp2vips: `, `gifload_buffer: `, `tiff2vips: `, and `source: ` (a truncated AVIF reports
 `source: bad seek to <n>` before libheif's own line), or on sharp's own first line
 `Warning treated as error due to failOn setting`, which sharp writes when `failOn`
 escalates a loader warning. An error whose first line comes from an encoder, such as
-`vips2png: unable to write to target target`, is not matched. Anything else propagates as
+`vips2png: unable to write to target target`, is not matched by the message. `transform`
+also listens for the sharp instance's `warning` event and passes `warned` to
+`fromSharpError`: a rejection after a libvips warning maps to `unsupported_source_type`,
+because a corrupt TIFF under png output fails with only the PNG saver's line while the
+escalated libtiff warning arrives as the event. The timeout and pixel-limit matches come
+first; a warning on a transform that succeeds is ignored. Anything else propagates as
 `internal_error` with the original as `cause`.
 
 ## Tests
@@ -220,10 +226,13 @@ change, and contains the href.
   check, also throws `source_too_large` (mapped from sharp's pixel-limit error).
 - A source damaged so that `inspect` reads it but the decode fails, one per loader domain
   (halved jpeg and png, corrupted jpeg, webp, and gif, truncated tiff and avif, each found by
-  probing), throws `unsupported_source_type` with the matched domain on the cause.
+  probing), throws `unsupported_source_type` with the matched domain on the cause; a
+  corrupted `quadrants` tiff with the default output, which fails with only the PNG saver's line
+  after a warning, does too; a png whose `pHYs` CRC fails warns and still transforms.
 - `fromSharpError` table: each observed decode message maps to `unsupported_source_type`;
   an encoder-only message, and a loader domain after the first line, map to
-  `internal_error`.
+  `internal_error`; with `warned`, the encoder-only message maps to
+  `unsupported_source_type` while a timeout and the pixel limit keep their codes.
 - `transform_timeout` mapping is tested by constructing the error sharp produces; a real
   timeout is not provoked in tests because the whole-second granularity makes it
   machine-dependent (decision 33).
