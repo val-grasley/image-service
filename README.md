@@ -234,15 +234,12 @@ input and time bounds the safeguards rely on. Jimp is pure JavaScript and far sl
 ImageMagick in a child process is a larger attack surface and harder to bound. The price is
 platform-specific binaries, which the bundling hook installs.
 
-**No UI framework.** The UI is one interactive page whose job is to make the API legible,
-and its state is small: form values, a phase, a source description, and a result or a
-problem. A framework's declarative rendering is the right discipline for the loading, empty,
-and error states the brief asks for, and the same discipline fits in plain TypeScript: one
-state object and one render function. That is somewhat more code than React would need, and
-none of it is framework code, so the SDK is exercised with no framework assumptions. esbuild
-bundles it and is already a dev dependency because CDK's bundling uses it. Vite's dev server
-and asset pipeline would go unused for one page, and Astro is built for mostly static pages
-with interactive islands, the opposite of this one.
+**No UI framework.** The UI is one page with a small amount of state: form values, a phase,
+a source description, and a result or a problem. A framework would add a dependency, its own
+build tooling, and a layer of its own concepts for little gain at that size, so the page is
+plain TypeScript with one state object and one render function, at the cost of somewhat more
+UI code, bundled by esbuild, which the CDK bundling already uses. The SDK is exercised with
+no framework assumptions.
 
 **Few runtime dependencies.** Nine in the API, not counting the workspace SDK, each pinned
 and each with a recorded reason, and none in the SDK itself. `undici` is used instead of
