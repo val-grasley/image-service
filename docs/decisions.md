@@ -1072,10 +1072,13 @@ evaluation, does not interrupt the AVIF encoder or mozjpeg's JPEG encoder: singl
 under 1 s, while WebP was interrupted on time. With the 8 s fetch budget an AVIF request could
 outlast the 20 s Lambda timeout and end as a platform kill instead of the shaped 500 of
 decision 22. AVIF at effort 0 measured about 5.3 s at 16 MP, 2.8 s at 8 MP, and 1.3 s at
-4 MP; plain libjpeg about 0.35 s at 16 MP.
+4 MP; plain libjpeg about 0.35 s at 16 MP. Decision 27's statement that a fixed low AVIF
+effort keeps encode time inside the transform budget was therefore wrong at effort 2.
 **Decision:** AVIF encodes with `effort: 0` and JPEG without `mozjpeg`. A new limit,
 `MAX_AVIF_OUTPUT_PIXELS` (default 8,000,000), refuses an AVIF output whose computed
-dimensions exceed it with 422 `output_too_large`, before the input is opened. The output
+dimensions exceed it with 422 `output_too_large`, before the input is opened. This corrects
+decision 27's effort and widens decision 23's `output_too_large`, which covered only the
+byte cap, to the AVIF pixel cap. The output
 dimensions come from `image/dimensions.ts`, a pure function that reproduces sharp's resize
 arithmetic from the oriented source dimensions and the spec, and is table-tested against
 sharp. `PIPELINE_REVISION` is bumped, since JPEG and AVIF output bytes change.
@@ -1091,7 +1094,9 @@ on noise from the fixture generator with sharp 0.35.5: AVIF at effort 0 took 4.7
 16 MP (now refused by the cap in about 1 ms), 1.9 to 2.1 s at 8 MP, and about 1 s at 4 MP;
 plain libjpeg took 0.29 to 0.33 s at 16 MP. The 8 MP default leaves room for decode, resize,
 and a slower CPU share inside the 5 s budget; the measurements were not taken on Lambda, and
-a deployment with more CPU per request can raise the cap.
+a deployment with more CPU per request can raise the cap. No test pins `effort: 0` or the
+absence of `mozjpeg`: what they buy is encode time, and a timing test would be
+machine-dependent, as decision 33 found for the timeout.
 
 ## 65. Transparent sources are flattened onto white before a JPEG encode
 

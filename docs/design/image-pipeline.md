@@ -53,15 +53,17 @@ arithmetic (`ResolveShrink` in sharp's `common.cc`, verified against sharp 0.35.
 
 - No dimension: the source size.
 - `fill` and `pad` with both dimensions, and `scale` with either or both: the requested
-  dimensions, with an omitted one staying the source's (sharp's `fill` ignores the aspect
-  ratio, so it does not derive the other dimension).
+  dimensions, with an omitted one staying the source's (sharp's `fit: 'fill'`, which is our
+  `scale`, ignores the aspect ratio, so it does not derive the other dimension).
 - Otherwise one uniform shrink factor, source over target: for `fit` the larger of the two
   factors and never below 1 (`withoutEnlargement`); for `fill` and `pad` with one dimension,
   that dimension's factor. Each axis is the source axis divided by the factor, capped so no
   axis drops below one pixel, rounded half up as libvips does.
 
-A JPEG source decoded with shrink-on-load can come out a pixel off this arithmetic; the cap
-tolerates that.
+JPEG and WebP sources decoded with shrink-on-load can differ from this arithmetic, usually by
+one pixel on the derived axis in either direction, more where an axis falls to a few pixels;
+the cap can therefore be exceeded by about a row or column, which does not matter for encode
+time.
 
 ## pipeline.ts
 
@@ -233,6 +235,10 @@ change, and contains the href.
   an encoder-only message, and a loader domain after the first line, map to
   `internal_error`; with `warned`, the encoder-only message maps to
   `unsupported_source_type` while a timeout and the pixel limit keep their codes.
+- The encoder options `effort: 0` for avif and the absence of `mozjpeg` for jpeg are
+  deliberately not pinned by a test: what they buy is encode time, and a timing assertion
+  would be machine-dependent for the same reason as the timeout (decision 33); the
+  measurements are in decision 64.
 - `transform_timeout` mapping is tested by constructing the error sharp produces; a real
   timeout is not provoked in tests because the whole-second granularity makes it
   machine-dependent (decision 33).
