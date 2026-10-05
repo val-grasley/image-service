@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "synth": "CDK_OUTDIR=cdk.out CDK_CONTEXT_JSON='{\"aws:cdk:bundling-stacks\":[]}' node bin/app.ts && cdk synth --app cdk.out --quiet",
+    "deploy": "cdk deploy",
     "test": "vitest run"
   },
   "dependencies": {

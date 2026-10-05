@@ -150,7 +150,7 @@ directory's statement.
 │   │   ├── errors.ts             Error code union, ProblemDetails type, ImageApiError.
 │   │   └── client.ts             fetch-based client returning typed results and errors.
 │   └── fake-upstream/src/        Dev-only. Generates test images and serves them through scenario routes; used by api tests and e2e.
-├── infra/                        CDK application: bin/app.ts and lib/.
+├── infra/                        CDK application: bin/app.ts, lib/, and cdk.json.
 └── e2e/                          Playwright tests against the full local stack. playwright.config.ts starts the fake
                                   upstream and the API instances as webServer entries on the addresses in stack.ts;
                                   tests/ holds one spec per UI state group.
@@ -413,6 +413,10 @@ Validation errors add `errors: [{ field, message }]`.
 
 413 and 415 describe fetched content rather than the request body, which is a proxy
 convention rather than their RFC 9110 meaning (decision 23).
+
+Behind CloudFront, only `GET` and `HEAD` reach the service; CloudFront answers other
+methods with its own 403, so `method_not_allowed` (405) is returned by the local server
+and by the function URL, not by the deployed distribution (decision 56).
 
 ## 8. Limits and configuration
 

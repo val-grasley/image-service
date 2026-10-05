@@ -760,3 +760,118 @@ the SDK's fetch: it would turn every resubmission into an origin request and a
 rate-limit hit for no new information.
 **Consequences:** A resubmission shows the cached result without a new origin request.
 Tests that need a second origin request change a parameter.
+
+## 51. The Lambda bundle defines `require` for bundled CommonJS
+
+**Date:** 2026-10-04
+**Context:** The bundling recipe in `design/infrastructure.md` produced an ESM bundle that
+fails at load with `Dynamic require of "node:https" is not supported`. undici and other
+dependencies are CommonJS; esbuild bundles their `require` calls of Node built-ins through a
+shim that throws in ESM output unless a `require` binding exists in module scope. Verified by
+running the recipe's esbuild arguments on `lambda.ts` and importing the result with a stub
+`awslambda` global: it threw before the banner and answered `GET /health` with the manifest
+version after.
+**Decision:** The bundling sets `banner` to
+`import { createRequire as bundleCreateRequire } from 'node:module'; const require = bundleCreateRequire(import.meta.url);`.
+The import is aliased because a bundled module that imports `createRequire` itself would
+otherwise collide with the banner's binding at the bundle's top level.
+**Rejected:** CommonJS output: `@hono/aws-lambda` and the app are ESM and the design fixes
+`format: ESM`. Marking undici and the AWS SDK external and installing them like sharp: more
+of the asset outside the lockfile's control, to avoid one line.
+**Consequences:** The bundle's built-in `require` calls resolve normally. A real bundle
+(synthesized with bundling, the sharp install included) holds `index.mjs` and sharp 0.35.5
+with its linux-arm64 binaries, 23 MB unzipped.
+
+## 52. CloudFront is granted `lambda:InvokeFunction` on the function, through the URL only
+
+**Date:** 2026-10-04
+**Context:** Lambda documents that function URLs created since October 2025 require both
+`lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` from the caller ("Control access to
+Lambda function URLs"), and CloudFront's guide for origin access control on function URLs
+grants both to `cloudfront.amazonaws.com`. `FunctionUrlOrigin.withOriginAccessControl` in
+aws-cdk-lib 2.272.0 adds only the first, so CloudFront's signed requests would be refused
+with 403.
+**Decision:** `api.grantInvokeUrl` to the CloudFront service principal with an
+`aws:SourceArn` condition on the distribution. The L2 helper adds `lambda:InvokeFunction`
+with `InvokedViaFunctionUrl: true`, so the grant cannot be used to invoke the function any
+other way.
+**Rejected:** `addPermission` with the action written out: hand-written IAM where an L2
+helper exists. Leaving it to a CDK upgrade: the first deploy would fail.
+**Consequences:** The function's policy holds a second, equivalent `lambda:InvokeFunctionUrl`
+statement beside the origin's. CDK warns that an `InvokeFunction` permission sits on the
+unqualified function while `currentVersion` is used; the URL targets the unqualified
+function, so the warning does not apply. Whether the URL accepts CloudFront's requests is
+confirmed on the first deploy.
+
+## 53. `npm run synth` skips bundling through the app's context, not the CLI's
+
+**Date:** 2026-10-04
+**Context:** `design/infrastructure.md` gave `cdk synth --context aws:cdk:bundling-stacks='[]'`.
+CDK CLI 2.1144.0 refuses it: "User-provided context cannot use keys prefixed with 'aws:'",
+and it sets `aws:cdk:bundling-stacks` to every stack for `synth` itself, with no flag to
+change that short of `--exclusively` on another stack.
+**Decision:** `npm run synth` runs `node bin/app.ts` with `CDK_CONTEXT_JSON` carrying the
+empty bundling list and `CDK_OUTDIR=cdk.out`, which is how the CLI passes context to an app,
+then `cdk synth --app cdk.out --quiet`, which reads that assembly and reports its warnings
+and errors. The template test builds its `App` with the same context.
+**Rejected:** Reading an environment variable in `bin/app.ts` to set `postCliContext`: a
+synth-mode branch in the app. `cdk ls`: skips bundling but prints no template and checks
+nothing.
+**Consequences:** `npm run synth` needs no credentials and no network. Its template has the
+same resources and properties as a deploy's except the function's asset hash and the version
+resource's logical ID, which derives from it. It omits the `AWS::CDK::Metadata` resource and
+its conditions, which the CLI adds through context, and does not read `cdk.json` context,
+which holds none. It needs `npm run build` first, for the UI asset.
+
+## 54. The UI bucket narrows `isWebsite` instead of relaxing the compiler
+
+**Date:** 2026-10-04
+**Context:** aws-cdk-lib declares `Bucket.isWebsite` as a getter returning
+`boolean | undefined` and `IBucket.isWebsite` as an optional `boolean`. Under
+`exactOptionalPropertyTypes` a `Bucket` is therefore not an `IBucket`, so passing it to
+`S3BucketOrigin.withOriginAccessControl` or `BucketDeployment` fails to compile.
+**Decision:** The stack's bucket is a file-local `UiBucket extends Bucket` whose `isWebsite`
+getter returns `super.isWebsite ?? false`. aws-cdk-lib's consumers test the property for
+truthiness or pass it to `fromBucketAttributes`, whose default is `false`, so the narrowing
+changes no behavior; the synthesized template is identical with and without it.
+**Rejected:** Turning off `exactOptionalPropertyTypes` in `infra/`: relaxes section 9. An
+`as IBucket` cast: forbidden by AGENTS.md. Importing the bucket by name: loses the bucket
+policy the origin access control adds.
+**Consequences:** `infra/` keeps every strict option. Another aws-cdk-lib construct with the
+same mismatch would need the same treatment.
+
+## 55. Viewer TLS is CloudFront's default for its own certificate
+
+**Date:** 2026-10-04
+**Context:** `design/infrastructure.md` asked for a TLS 1.2 minimum. The distribution has
+no custom domain, so it serves the `*.cloudfront.net` certificate, whose security policy
+CloudFront fixes at TLSv1; `minimumProtocolVersion` takes effect only with a custom
+certificate, and aws-cdk-lib ignores it otherwise with a warning.
+**Decision:** The stack sets no minimum protocol version. HTTP/2 and HTTP/3 stay enabled.
+**Rejected:** Setting `minimumProtocolVersion` anyway: it does nothing and reads as if it
+did. A custom domain and ACM certificate in us-east-1: needs a domain the repository does
+not own, and decision 26 already keeps the deployment to one command without one.
+**Consequences:** A viewer can negotiate TLS 1.0 or 1.1 with the default domain. A
+deployment with a custom domain sets `certificate`, `domainNames`, and
+`minimumProtocolVersion: TLS_V1_2_2021`. The README states this. A custom domain is listed
+as a next step.
+
+## 56. The distribution accepts only GET and HEAD
+
+**Date:** 2026-10-04
+**Context:** The API serves only `GET` and `HEAD` (and `OPTIONS` for CORS preflights,
+which no client of this API triggers, since the SDK sends no custom request headers).
+Architecture §7 maps an unsupported method on a known path to 405 `method_not_allowed`.
+CloudFront's default behavior allows `GET` and `HEAD` and answers other methods itself
+with 403.
+**Decision:** Keep the API behavior at `ALLOW_GET_HEAD`, so the edge accepts only the
+methods the service implements. The 405 contract holds for the local server.
+**Rejected:** `ALLOW_ALL` at the edge so the service's 405 answers: CloudFront's origin
+access control for function URLs signs a request body only when the client sends its
+SHA-256 in `x-amz-content-sha256` ("Restrict access to an AWS Lambda function URL
+origin"), so a POST or PUT without it would be refused by the function URL's IAM auth
+before the app runs. That trades one non-405 answer for another, and widens the edge
+surface to methods the service never accepts.
+**Consequences:** Clients of the deployed service see CloudFront's 403 (not problem
+details) for unsupported methods. The OpenAPI document's 405 responses describe the
+service, not the edge.

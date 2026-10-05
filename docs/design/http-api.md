@@ -105,9 +105,10 @@ step 4 requires.
 The handler: parses `If-None-Match` into a list; calls `processImage`; on `image` builds
 the response with the headers in section 7 and the body (omitted for HEAD); on
 `not_modified` responds 304 with `ETag`, `Cache-Control`, `X-Request-Id`. The image
-response also sets `Content-Length` from the byte length, so HEAD carries it; whether the
-Lambda streaming adapter keeps it is for the infrastructure commit to confirm, and clients
-measure size from the body regardless (section 7).
+response also sets `Content-Length` from the byte length, so HEAD carries it; the adapter
+passes it to Lambda, and whether the streaming invoke keeps it is to be confirmed on the
+first deploy (`design/infrastructure.md`, "Lambda entry"); clients measure size from the body
+regardless (section 7).
 
 Each validation message is set on its Zod check (`{ error }`), and the cross-field
 refinement carries its own, so the default hook only copies `issue.message` into `fields`,
