@@ -88,7 +88,7 @@ describe('CloudFront', () => {
     });
   });
 
-  it('routes the UI paths to the bucket and every other path to the function URL', () => {
+  it('routes the UI paths to the bucket and every other path to the function URL, caching only GET and HEAD', () => {
     const apiOrigin = new Capture();
     const uiOrigin = new Capture();
     const lambdaAccessControlId = onlyLogicalId('AWS::CloudFront::OriginAccessControl', {
@@ -125,7 +125,8 @@ describe('CloudFront', () => {
       DistributionConfig: {
         DefaultCacheBehavior: {
           TargetOriginId: apiOrigin.asString(),
-          AllowedMethods: ['GET', 'HEAD'],
+          AllowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+          CachedMethods: ['GET', 'HEAD'],
           CachePolicyId: { Ref: onlyLogicalId('AWS::CloudFront::CachePolicy') },
           OriginRequestPolicyId: { Ref: onlyLogicalId('AWS::CloudFront::OriginRequestPolicy') },
           Compress: false,

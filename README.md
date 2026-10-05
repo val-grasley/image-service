@@ -173,7 +173,9 @@ in-process only), `X-Request-Id`, `X-Content-Type-Options: nosniff`, and
 `Content-Disposition: inline`. A matching `If-None-Match` gets 304 without a transform. A
 caller's `X-Request-Id` is kept if it matches `[A-Za-z0-9._-]{1,64}`. CORS allows any origin
 and exposes `ETag`, `X-Request-Id`, the `X-Image-*` headers, `X-Result-Cache`, and the
-rate-limit headers. Upstream headers are never forwarded.
+rate-limit headers. A browser on another origin may send `If-None-Match` and `X-Request-Id`:
+the preflight they trigger is answered 204, and CloudFront passes `OPTIONS` through for it.
+Upstream headers are never forwarded.
 
 Every error is `application/problem+json` with `Cache-Control: no-store` and a stable `code`
 from the SDK's union. Validation failures add `errors: [{ field, message }]`, one per
@@ -209,7 +211,7 @@ into `/docs`.
 
 In production two errors come from AWS rather than the service: Lambda's plain-text 429 when
 reserved concurrency is exhausted, which the SDK reports as `internal_error` with the real
-status, and CloudFront's own 403 for methods other than GET and HEAD.
+status, and CloudFront's own 403 for methods other than GET, HEAD, and OPTIONS.
 
 ## Limits and safeguards
 

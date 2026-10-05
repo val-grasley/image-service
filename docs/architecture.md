@@ -383,9 +383,13 @@ both paths so a changed error code list is never stale at the edge; every 4xx an
 CORS: `Access-Control-Allow-Origin: *` on every response, since there are no credentials, and
 `Access-Control-Expose-Headers` set to exactly `ETag`, `X-Request-Id`, `X-Image-Width`,
 `X-Image-Height`, `X-Image-Format`, `X-Result-Cache`, `Retry-After`, `RateLimit`,
-`RateLimit-Policy`. `ETag` is listed because it is not CORS-safelisted. Clients measure file size from the
-received body, not from `Content-Length`, because streamed Lambda responses may be delivered
-chunked.
+`RateLimit-Policy`. `ETag` is listed because it is not CORS-safelisted. Simple `GET`s need
+no preflight; a request sending `If-None-Match` or `X-Request-Id` is preflighted, and the
+preflight is answered 204 with `Access-Control-Allow-Methods: GET,HEAD` and
+`Access-Control-Allow-Headers: If-None-Match,X-Request-Id`. CloudFront allows `OPTIONS` on
+the API behavior for that purpose and does not cache it (decision 70). Clients measure file
+size from the received body, not from `Content-Length`, because streamed Lambda responses
+may be delivered chunked.
 
 ### ETag and conditional requests
 
@@ -441,9 +445,10 @@ unknown parameter's message lists the ones the endpoint accepts
 413 and 415 describe fetched content rather than the request body, which is a proxy
 convention rather than their RFC 9110 meaning (decision 23).
 
-Behind CloudFront, only `GET` and `HEAD` reach the service; CloudFront answers other
-methods with its own 403, so `method_not_allowed` (405) is returned by the local server
-and by the function URL, not by the deployed distribution (decision 56).
+Behind CloudFront, only `GET`, `HEAD`, and `OPTIONS` reach the service; CloudFront answers
+other methods with its own 403, so `method_not_allowed` (405) is returned by the local
+server and by the function URL, not by the deployed distribution (decisions 56 and 70).
+`OPTIONS` is a CORS preflight, answered 204, never 405.
 
 ## 8. Limits and configuration
 

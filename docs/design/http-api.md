@@ -155,10 +155,15 @@ status and headers with no body, so HEAD is not registered separately.
 
 1. `request-id`: validates or generates `X-Request-Id`, sets it on the context and on the
    response, creates the per-request child logger.
-2. `cors`: `hono/cors` with origin `*`, methods `GET, HEAD`, and `exposeHeaders` set to
+2. `cors`: `hono/cors` with origin `*`, methods `GET, HEAD`, `allowHeaders` set to
+   `If-None-Match` and `X-Request-Id`, and `exposeHeaders` set to
    exactly `ETag`, `X-Request-Id`, `X-Image-Width`, `X-Image-Height`, `X-Image-Format`,
    `X-Result-Cache`, `Retry-After`, `RateLimit`, `RateLimit-Policy`. `ETag` is listed
-   because it is not CORS-safelisted and the SDK reads it.
+   because it is not CORS-safelisted and the SDK reads it. The middleware answers every
+   `OPTIONS` itself with 204 and those headers, without calling the later middleware, so a
+   preflight is never rate limited or 405. `allowHeaders` is a fixed list because Hono
+   otherwise mirrors `Access-Control-Request-Headers`, which CloudFront does not forward, so
+   a deployed preflight would get no `Access-Control-Allow-Headers` at all (decision 70).
 3. `loop-guard`: refuses `X-Image-Service-Fetch` with `url_not_allowed`.
 4. `rate-limit`: `design/rate-limiting.md`, on `/process` and `/info` only. Runs before
    validation so invalid requests count. `/health`, the documentation routes, and unknown
@@ -234,4 +239,6 @@ deployment.
   with it, with their values where it fixes them; `/docs` contains an anchor for every
   error code.
 - `middleware.test.ts`: request-id accepted when valid, regenerated when not; the loop
-  marker is refused; CORS headers present on 200, 304, and error responses.
+  marker is refused; CORS headers present on 200, 304, and error responses; a preflight is
+  204 with the fixed allow-list, both with its CORS request headers and stripped of them as
+  CloudFront forwards it.

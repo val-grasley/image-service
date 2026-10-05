@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import {
   AllowedMethods,
+  CachedMethods,
   CacheCookieBehavior,
   CacheHeaderBehavior,
   CachePolicy,
@@ -111,7 +112,8 @@ export class ImageServiceStack extends Stack {
     const distribution = new Distribution(this, 'Distribution', {
       defaultBehavior: {
         origin: FunctionUrlOrigin.withOriginAccessControl(apiUrl),
-        allowedMethods: AllowedMethods.ALLOW_GET_HEAD,
+        allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+        cachedMethods: CachedMethods.CACHE_GET_HEAD,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         compress: false,
         cachePolicy: new CachePolicy(this, 'ApiCachePolicy', {

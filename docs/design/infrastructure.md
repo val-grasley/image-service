@@ -31,11 +31,20 @@ the invalidation.
 - Origin `api`: `FunctionUrlOrigin.withOriginAccessControl(functionUrl)`.
 - Behaviors: `/index.html`, `/favicon.ico`, `/assets/*` → `ui`, cache policy
   `CACHING_OPTIMIZED`. Default behavior → `api`. The default root object serves `/`.
-  Every behavior redirects HTTP to HTTPS. The API behavior allows `GET` and `HEAD` only, so
-  CloudFront itself answers other methods with 403 and the API's 405 is seen only locally
-  (decision 56); allowing them would not help, because origin access control signs a request
-  body only when the client sends its SHA-256 in `x-amz-content-sha256`. The API behavior
-  sets `compress: false` to match its cache policy.
+  Every behavior redirects HTTP to HTTPS. The API behavior allows `GET`, `HEAD`, and
+  `OPTIONS`, so a CORS preflight reaches the function, and CloudFront itself answers other
+  methods with 403, so the API's 405 is seen only locally (decisions 56 and 70); allowing
+  those would not help, because origin access control signs a request body only when the
+  client sends its SHA-256 in `x-amz-content-sha256`. A preflight has no body, so its
+  signature is unaffected. The API behavior sets `compress: false` to match its cache policy.
+- Preflights: the behavior caches `GET` and `HEAD` only (`cachedMethods` set explicitly, so
+  the template states it), and the service sends `Cache-Control: no-store` on its 204, so
+  every preflight reaches the function and none is cached at the edge. Caching one would be
+  safe, since with origin `*`, no credentials, and a fixed allow-list the answer is the same
+  for every viewer and needs no CORS header in the cache key; leaving `OPTIONS` uncached keeps
+  the edge cache to the methods it held before. The origin request policy forwards neither
+  `Origin` nor the `Access-Control-Request-*` headers, which is why the service lists its
+  allowed request headers instead of mirroring them (`design/http-api.md`, "Middleware").
 - API cache policy: query strings `all`, headers `none`, cookies `none`, default TTL 0,
   min TTL 0, max TTL 86400, so origin `Cache-Control` governs and a missing header means no
   caching. Gzip and Brotli disabled (images are already compressed).
@@ -162,7 +171,7 @@ test needs no UI build, and asserts:
 - The origin request policy's header allow-list is exactly the three names.
 - The API cache policy forwards all query strings and no headers or cookies.
 - Behaviors: the three UI path patterns target the S3 origin; the default targets the
-  function URL origin.
+  function URL origin, allows `GET`, `HEAD`, and `OPTIONS`, and caches `GET` and `HEAD`.
 - The function URL has `AuthType: AWS_IAM` and `InvokeMode: RESPONSE_STREAM`.
 - The function has the memory, timeout, architecture, runtime, and reserved concurrency
   from section 8, and exactly the three environment variables above.

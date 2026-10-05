@@ -1273,3 +1273,40 @@ shape. Decision 49's described states are now "Copied", the failure message, or 
 `render.ts` has one listener that does not dispatch, on the image whose display only the
 browser sees. The `ui` skill now says that listeners that change application state go
 through `dispatch`, and points here for the exception.
+
+## 70. The distribution passes OPTIONS, and the service lists the request headers it allows
+
+**Date:** 2026-10-04
+**Context:** Decision 56 kept the API behavior at `GET` and `HEAD` on the premise that no
+client triggers a CORS preflight. Architecture section 7 documents `If-None-Match` and
+`X-Request-Id` as request headers the service reads, and neither is CORS-safelisted, so a
+browser on another origin that sends either preflights first. Against the live
+distribution, `OPTIONS /process` with `Access-Control-Request-Headers: if-none-match` got
+CloudFront's HTML 403, so such a client could not use the deployed service. The shipped UI
+and SDK send no custom headers and were unaffected. Allowing `OPTIONS` alone would not
+have been enough: `hono/cors` with no `allowHeaders` mirrors the request's
+`Access-Control-Request-Headers` (read in `hono/dist/middleware/cors/index.js`, Hono
+4.13.13), and CloudFront forwards that header only when a cache or origin request policy
+names it ("Configure CloudFront to respect CORS settings", CloudFront Developer Guide),
+which ours does not, so the deployed preflight would have carried no
+`Access-Control-Allow-Headers` and still failed in the browser.
+**Decision:** The API behavior allows `GET`, `HEAD`, and `OPTIONS` and caches `GET` and
+`HEAD`, with `cachedMethods` set explicitly. The `cors` middleware sets `allowHeaders` to
+`If-None-Match` and `X-Request-Id`, so it answers every `OPTIONS` with the same 204 whether
+or not the CORS request headers arrive. This supersedes the "only GET and HEAD" part of
+decision 56; its reasoning about other methods stands. Origin access control is unaffected:
+a preflight carries no body, so the signature needs no client-supplied payload hash.
+**Rejected:** Forwarding `Access-Control-Request-Headers` in the origin request policy so
+Hono could mirror it: widens the three-header forward list architecture section 2 fixes,
+and would echo whatever header a caller names although the service reads only two.
+Answering preflights at the edge with a response headers policy: a second place that owns
+the CORS contract, which the service already owns. Caching `OPTIONS`: safe, since the answer
+is the same for every viewer, but it would widen what the edge caches, and the service's 204
+carries `Cache-Control: no-store` in any case.
+**Consequences:** Cross-origin clients can send `If-None-Match` and `X-Request-Id` to the
+deployed service. Every preflight that reaches the edge is one function invocation; the
+`cors` middleware returns its 204 without calling the middleware after it, the rate limiter
+among them, so a preflight costs no rate-limit budget. A request header that is not
+CORS-safelisted and that the service starts reading must be added to `allowHeaders` as well
+as to the origin request policy. Methods other than `GET`, `HEAD`, and `OPTIONS` still get
+CloudFront's 403.

@@ -63,7 +63,15 @@ export function createApp(
     }
   });
   app.use(requestId(deps.logger));
-  app.use(cors({ origin: '*', allowMethods: ['GET', 'HEAD'], exposeHeaders: EXPOSED_HEADERS }));
+  app.use(
+    cors({
+      origin: '*',
+      allowMethods: ['GET', 'HEAD'],
+      // Listed rather than mirrored: CloudFront does not forward Access-Control-Request-Headers.
+      allowHeaders: ['If-None-Match', 'X-Request-Id'],
+      exposeHeaders: EXPOSED_HEADERS,
+    }),
+  );
   app.use(loopGuard);
   const limit = rateLimit(deps.rateLimiter, config, deps.clock);
   app.use('/process', limit);

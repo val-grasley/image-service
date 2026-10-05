@@ -117,6 +117,38 @@ describe('CORS', () => {
       expect(corsHeaders(response)).toEqual({ origin: '*', exposed: EXPOSED });
     }
   });
+
+  function preflightHeaders(response: Response) {
+    return {
+      status: response.status,
+      origin: response.headers.get('access-control-allow-origin'),
+      methods: response.headers.get('access-control-allow-methods'),
+      headers: response.headers.get('access-control-allow-headers'),
+    };
+  }
+  const PREFLIGHT_ANSWER = {
+    status: 204,
+    origin: '*',
+    methods: 'GET,HEAD',
+    headers: 'If-None-Match,X-Request-Id',
+  };
+
+  it('answers a preflight for If-None-Match with 204, allowing both request headers the API reads', async () => {
+    const response = await createHarness(fake).request('/process', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://client.example',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'if-none-match',
+      },
+    });
+    expect(preflightHeaders(response)).toEqual(PREFLIGHT_ANSWER);
+  });
+
+  it('answers a preflight stripped of its CORS request headers, as CloudFront forwards it, the same way', async () => {
+    const response = await createHarness(fake).request('/process', { method: 'OPTIONS' });
+    expect(preflightHeaders(response)).toEqual(PREFLIGHT_ANSWER);
+  });
 });
 
 describe('rate limit', () => {
