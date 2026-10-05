@@ -1,5 +1,8 @@
 # Image service
 
+**Live:** [https://d244qv5g3kagmy.cloudfront.net](https://d244qv5g3kagmy.cloudfront.net)
+(the UI at `/`, API docs at `/docs`), deployed from this repository to us-east-2.
+
 An HTTP service that fetches an image from a caller-supplied URL, resizes and re-encodes it,
 and returns the result, with a single-page UI that calls the API through a dependency-free
 TypeScript SDK. It deploys to AWS Lambda behind CloudFront with CDK and runs locally with no
@@ -318,16 +321,25 @@ Credentials, account, and region come from the ambient AWS environment; the stac
 to use, and `FunctionUrl`, which refuses direct requests. `npm run synth` checks the template
 after `npm run build` with no credentials and no network.
 
-The first deploy confirms what synthesis cannot:
+The first deploy confirms what synthesis cannot. Results from the live deployment:
 
-1. `GET /health` returns the version: CloudFront's signed requests are accepted and the
-   bundle loads arm64 sharp (`Could not load the "sharp" module` means its install did not run).
-2. `GET /` returns the UI; if it gets the API's 404, a `/` behavior to S3 is the fix.
-3. `curl -sI` on `/process` shows whether `Content-Length` survives the streaming invoke.
+1. `GET /health` returns the version, so CloudFront's signed requests are accepted and the
+   bundle loads arm64 sharp. Confirmed (`{"status":"ok","version":"0.1.0"}`).
+2. `GET /` returns the UI. Confirmed; the default root object applies before behavior
+   matching.
+3. `Content-Length` does not survive the streaming invoke: Lambda moves it to
+   `x-amzn-Remapped-Content-Length` and delivers the body chunked, and a `HEAD` response
+   carries `Content-Length: 0`. Clients measure size from the body, as designed.
 4. Two clients: one sending more than 60 distinct `/process` requests in a minute gets 429
-   while the other still gets 200. This shows `CloudFront-Viewer-Address` arrives; without
-   it every client falls into one bucket.
-5. After a code change and redeploy, `/docs` and `/openapi.json` show the new version.
+   while the other still gets 200. Confirmed with an IPv4 and an IPv6 client: exactly 60
+   of 71 parallel requests succeeded, the rest got 429 with `Retry-After`, and the other
+   client was unaffected, so `CloudFront-Viewer-Address` arrives.
+5. After a code change and redeploy, `/docs` and `/openapi.json` show the new version. Not
+   yet exercised; the first deployment is still the current one.
+
+Encode times on Lambda (1536 MB, arm64), measured through the distribution on a cache miss:
+an 8 MP AVIF at the cap in 1.6 s, a 16 MP JPEG in 1.5 s, and a 16 MP WebP in 3.1 s, all
+inside the 5 s transform budget.
 
 **Cold starts.** A new instance loads the bundle and sharp's native library before answering,
 so its first request is slower, and its result and source caches start empty. No provisioned

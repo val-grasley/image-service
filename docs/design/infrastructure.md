@@ -116,10 +116,10 @@ environment at module load. `SERVICE_VERSION` is the bundling's `define` (decisi
 annotation is needed because the package does not export its `Handler` type by name.
 
 The adapter copies every response header, `Content-Length` included, into the stream's
-metadata. Whether Lambda's streaming invoke keeps `Content-Length` on the response CloudFront
-receives cannot be checked without a deploy; it is to be confirmed on the first deploy with
-`curl -sI` and `curl -s -D - -o /dev/null` against `/process` (`design/http-api.md`,
-"Routes"). Clients measure size from the body regardless.
+metadata, but Lambda's streaming invoke does not keep it: the first deploy showed the
+response arriving chunked with the value moved to `x-amzn-Remapped-Content-Length`, and a
+`HEAD` response carrying `Content-Length: 0`. Clients measure size from the body, as
+`design/http-api.md` "Routes" and architecture section 7 require.
 
 ## Deploy steps (README)
 
@@ -137,17 +137,21 @@ targets the account and region of the ambient credentials, which are the values 
 exposes under those names. The deploy needs network for the sharp install and a local
 esbuild, which the root `devDependencies` provide.
 
-The first deploy confirms what synthesis cannot:
+The first deploy confirms what synthesis cannot. All of these were confirmed on the first
+deployment (us-east-2):
 
 - `GET /` returns the UI. This relies on CloudFront applying the default root object before
-  it matches behaviors; if it does not, `/` reaches the API and gets its 404.
+  it matches behaviors; it does.
 - `GET /health` through the distribution returns the package version, which shows that the
   function URL accepts CloudFront's signed requests (decision 52) and that the bundle loads
   with the arm64 sharp.
 - `CloudFront-Viewer-Address` reaches the function: a client exceeding the rate limit gets
-  429 while another does not.
-- Whether `Content-Length` survives the streaming invoke (section "Lambda entry").
+  429 while another does not (exactly 60 of 71 parallel requests from one client succeeded;
+  a second client was unaffected).
+- `Content-Length` does not survive the streaming invoke (section "Lambda entry").
 - `cdk deploy` asks to approve the IAM changes on the first run; that prompt is expected.
+  A new account's Lambda concurrency quota is 10, which the function's reserved
+  concurrency cannot fit; the quota has to be raised in the deployment region first.
 
 ## Tests
 
