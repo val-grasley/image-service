@@ -8,9 +8,11 @@ import { toSpec } from './spec.ts';
 
 type Size = { width: number; height: number };
 
+// `source` is always the oriented size; with `orientation` 6 the file stores it rotated.
 const cases: {
   name: string;
   source: Size;
+  orientation?: 6;
   spec: { width?: number; height?: number; crop: CropMode };
   expect: Size;
 }[] = [
@@ -153,6 +155,13 @@ const cases: {
     expect: { width: 1, height: 1 },
   },
   {
+    name: 'fit works from the oriented size of a source stored rotated',
+    source: { width: 200, height: 400 },
+    orientation: 6,
+    spec: { width: 100, crop: 'fit' },
+    expect: { width: 100, height: 200 },
+  },
+  {
     name: 'fit takes the tighter of the two dimensions without enlarging',
     source: { width: 5, height: 5 },
     spec: { width: 4096, height: 3, crop: 'fit' },
@@ -175,7 +184,16 @@ describe('outputDimensions', () => {
 describe('outputDimensions agrees with what transform produces', () => {
   for (const c of cases) {
     it(c.name, async () => {
-      const source = await generateImage({ ...c.source, format: 'png' });
+      const source = await generateImage(
+        c.orientation === undefined
+          ? { ...c.source, format: 'png' }
+          : {
+              width: c.source.height,
+              height: c.source.width,
+              format: 'png',
+              orientation: c.orientation,
+            },
+      );
       const spec = toSpec({ url: 'https://images.example/source', ...c.spec }, { quality: 80 });
       const result = await transform(
         source.bytes,

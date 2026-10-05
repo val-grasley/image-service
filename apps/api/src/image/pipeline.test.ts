@@ -269,6 +269,12 @@ describe('transform limits', () => {
     );
   });
 
+  it('accepts an avif output exactly at the AVIF pixel cap', async () => {
+    const cap = { maxAvifOutputPixels: 400 * 200 };
+    const result = await run(await quadrants(400, 200), { format: 'avif' }, cap);
+    expect([result.format, result.width, result.height]).toEqual(['avif', 400, 200]);
+  });
+
   it('counts the AVIF cap on the output dimensions, not the source', async () => {
     const cap = { maxAvifOutputPixels: 400 * 200 - 1 };
     const result = await run(await quadrants(400, 200), { width: 200, format: 'avif' }, cap);
