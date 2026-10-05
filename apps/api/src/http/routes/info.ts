@@ -4,7 +4,7 @@ import type { OperationDeps } from '../../operations/deps.ts';
 import { describeSource } from '../../operations/describe-source.ts';
 import type { AppEnv } from '../context.ts';
 import { problemResponses } from '../openapi.ts';
-import { sourceUrlParam } from './process.ts';
+import { sourceUrlParam, strictQuery } from './process.ts';
 
 const sourceInfo = z
   .object({
@@ -27,7 +27,7 @@ export function addInfoRoute(app: OpenAPIHono<AppEnv>, config: Config, deps: Ope
     method: 'get',
     path: '/info',
     summary: 'Read the metadata of a source image without transforming it',
-    request: { query: z.object({ url: sourceUrlParam }) },
+    request: { query: strictQuery({ url: sourceUrlParam }) },
     responses: {
       200: {
         description: 'Metadata of the source image.',

@@ -342,6 +342,10 @@ This section is the contract the design document must not contradict.
 | `format` | `jpeg`, `png`, `webp`, `avif` | source format; `png` for TIFF and GIF sources | |
 | `quality` | integer 1 to 100 | `DEFAULT_QUALITY` | Passed to lossy encoders only; not passed to the PNG or GIF encoders |
 
+No other parameter is accepted: an unknown one, including a known name in another case, is
+a 400 `invalid_parameter` naming it, so a misspelling cannot return an untransformed image
+and extra parameters cannot mint cache keys (decision 61). `/info` accepts only `url`.
+
 Animated inputs contribute their first frame. AVIF encoding uses a fixed low effort so encode
 time stays inside the transform budget.
 
@@ -399,11 +403,12 @@ a CloudFront custom error response can convert it and is a listed next step.
 ```
 
 `type` is a relative reference resolved against the request URL, so it is valid on any host.
-Validation errors add `errors: [{ field, message }]`.
+Validation errors add `errors: [{ field, message }]`, one entry per rejected parameter; an
+unknown parameter's message is `unknown parameter`.
 
 | Situation | Status | Code |
 |---|---|---|
-| Malformed or out-of-range parameters, including output dimensions over limits | 400 | `invalid_parameter` |
+| Malformed, out-of-range, or unknown parameters, including output dimensions over limits | 400 | `invalid_parameter` |
 | URL blocked by policy, including a blocked redirect hop or the loop marker | 403 | `url_not_allowed` |
 | Source exceeds `MAX_SOURCE_BYTES` or `MAX_INPUT_PIXELS` | 413 | `source_too_large` |
 | Source is not a supported image type | 415 | `unsupported_source_type` |

@@ -12,7 +12,7 @@ const SWAGGER_UI_VERSION = '5.33.1';
 
 const EXPLANATIONS: Record<ErrorCode, string> = {
   invalid_parameter:
-    'A query parameter is missing or out of range; errors names each one and says what is accepted.',
+    'A query parameter is missing, out of range, or not one the endpoint accepts; errors names each one and says what is accepted.',
   url_not_allowed:
     'The fetch policy refuses the source URL, a redirect hop, or an address it resolves to, or the request came from this service itself.',
   not_found: 'No endpoint exists at this path.',

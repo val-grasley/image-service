@@ -65,9 +65,16 @@ export function toProblem(err: unknown, requestId: string): Problem {
 export function invalidParameters(error: ZodError): ServiceError {
   const fields: { field: string; message: string }[] = [];
   for (const issue of error.issues) {
-    const field = issue.path.map(String).join('.');
-    if (!fields.some((existing) => existing.field === field)) {
-      fields.push({ field, message: issue.message });
+    // One unrecognized_keys issue names every unknown parameter at the object's own path.
+    const paths =
+      issue.code === 'unrecognized_keys'
+        ? issue.keys.map((key) => [...issue.path, key])
+        : [issue.path];
+    for (const path of paths) {
+      const field = path.map(String).join('.');
+      if (!fields.some((existing) => existing.field === field)) {
+        fields.push({ field, message: issue.message });
+      }
     }
   }
   const names = fields.map(({ field }) => field).join(', ');

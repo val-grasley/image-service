@@ -57,6 +57,35 @@ describe('GET /info', () => {
   });
 });
 
+describe('GET /info validation', () => {
+  it('refuses a parameter other than url, naming it, without fetching', async () => {
+    const { request } = createHarness(fake);
+    const before = fake.requests().length;
+    const response = await request(
+      query('/info', { url: sourceUrl(fake, '/image/png'), width: '10' }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      code: 'invalid_parameter',
+      errors: [{ field: 'width', message: 'unknown parameter' }],
+    });
+    expect(fake.requests()).toHaveLength(before);
+  });
+
+  it('refuses url given twice as an error on url', async () => {
+    const { request } = createHarness(fake);
+    const params = new URLSearchParams([
+      ['url', sourceUrl(fake, '/image/png')],
+      ['url', sourceUrl(fake, '/image/jpeg')],
+    ]);
+    const response = await request(`/info?${params.toString()}`);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      errors: [{ field: 'url', message: 'must be an absolute URL' }],
+    });
+  });
+});
+
 describe('GET /info and GET /process refuse bad URLs alike', () => {
   const cases: {
     name: string;

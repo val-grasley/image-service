@@ -144,6 +144,7 @@ describe('GET /process validation', () => {
   const integer1To1024 = 'must be an integer between 1 and 1024';
   const integer1To100 = 'must be an integer between 1 and 100';
   const absoluteUrl = 'must be an absolute URL';
+  const unknownParameter = 'unknown parameter';
   const cases: { name: string; params: Record<string, string>; field: string; message: string }[] =
     [
       {
@@ -249,5 +250,115 @@ describe('GET /process validation', () => {
       errors: [{ field: 'width', message: 'width times height must be at most 1000000 pixels' }],
     });
     expect(fake.requests()).toHaveLength(before);
+  });
+
+  // Pairs rather than a record, so a case can repeat a key.
+  const unknownCases: {
+    name: string;
+    params: () => [string, string][];
+    errors: { field: string; message: string }[];
+  }[] = [
+    {
+      name: 'a misspelled parameter, naming it',
+      params: () => [
+        ['url', sourceUrl(fake, '/image/png')],
+        ['widht', '5'],
+      ],
+      errors: [{ field: 'widht', message: unknownParameter }],
+    },
+    {
+      name: 'a parameter whose case differs from a known one, naming it',
+      params: () => [
+        ['url', sourceUrl(fake, '/image/png')],
+        ['Width', '5'],
+      ],
+      errors: [{ field: 'Width', message: unknownParameter }],
+    },
+    {
+      name: 'two unknown parameters, naming each',
+      params: () => [
+        ['url', sourceUrl(fake, '/image/png')],
+        ['v', '2'],
+        ['cachebust', '1'],
+      ],
+      errors: [
+        { field: 'v', message: unknownParameter },
+        { field: 'cachebust', message: unknownParameter },
+      ],
+    },
+    {
+      name: 'an unknown parameter given twice, naming it once',
+      params: () => [
+        ['url', sourceUrl(fake, '/image/png')],
+        ['v', '1'],
+        ['v', '2'],
+      ],
+      errors: [{ field: 'v', message: unknownParameter }],
+    },
+    {
+      name: 'an unknown parameter beside an invalid known one, naming both',
+      params: () => [
+        ['url', sourceUrl(fake, '/image/png')],
+        ['width', '0'],
+        ['widht', '5'],
+      ],
+      errors: [
+        { field: 'width', message: integer1To1024 },
+        { field: 'widht', message: unknownParameter },
+      ],
+    },
+    {
+      name: 'a source URL left unencoded, naming the parameter its own query string spilled',
+      params: () => [
+        ['url', sourceUrl(fake, '/image/png?w=10')],
+        ['h', '20'],
+      ],
+      errors: [{ field: 'h', message: unknownParameter }],
+    },
+  ];
+
+  for (const c of unknownCases) {
+    it(`refuses ${c.name}, without fetching`, async () => {
+      const { request } = createHarness(fake);
+      const before = fake.requests().length;
+      const response = await request(`/process?${new URLSearchParams(c.params()).toString()}`);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ code: 'invalid_parameter', errors: c.errors });
+      expect(fake.requests()).toHaveLength(before);
+    });
+  }
+
+  it('refuses a known parameter given twice as an error on that parameter', async () => {
+    const { request } = createHarness(fake);
+    const params = new URLSearchParams([
+      ['url', sourceUrl(fake, '/image/png')],
+      ['width', '10'],
+      ['width', '20'],
+    ]);
+    const response = await request(`/process?${params.toString()}`);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      errors: [{ field: 'width', message: integer1To1024 }],
+    });
+  });
+
+  it('answers an unknown parameter with a complete invalid_parameter problem', async () => {
+    const { request } = createHarness(fake);
+    const response = await request(
+      query('/process', { url: sourceUrl(fake, '/image/png'), widht: '5' }),
+      { headers: { 'X-Request-Id': 'unknown-parameter' } },
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get('content-type')).toBe('application/problem+json');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({
+      type: '/docs#error-invalid_parameter',
+      title: 'Invalid parameter',
+      status: 400,
+      detail: 'Invalid query parameters: widht.',
+      code: 'invalid_parameter',
+      requestId: 'unknown-parameter',
+      errors: [{ field: 'widht', message: unknownParameter }],
+    });
   });
 });

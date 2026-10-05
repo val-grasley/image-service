@@ -11,6 +11,14 @@ export const sourceUrlParam = z.url({ error: 'must be an absolute URL' }).openap
   example: 'https://images.example/photo.jpg',
 });
 
+// Strict, because an ignored misspelling returns an untransformed image with a 200 and every
+// extra parameter mints another CDN cache key (decision 61).
+export function strictQuery<Shape extends z.core.$ZodLooseShape>(
+  shape: Shape,
+): z.ZodObject<z.core.util.Writeable<Shape>, z.core.$strict> {
+  return z.strictObject(shape, { error: 'unknown parameter' });
+}
+
 function integer(min: number, max: number) {
   const error = `must be an integer between ${String(min)} and ${String(max)}`;
   return z.coerce
@@ -25,42 +33,40 @@ function processQuery(
   config: Pick<Config, 'maxOutputDimension' | 'maxOutputPixels' | 'defaultQuality'>,
 ) {
   const maxPixels = config.maxOutputPixels;
-  return z
-    .object({
-      url: sourceUrlParam,
-      width: integer(1, config.maxOutputDimension).openapi({
-        description: 'Output width in pixels. Omit width or height to keep the aspect ratio.',
+  return strictQuery({
+    url: sourceUrlParam,
+    width: integer(1, config.maxOutputDimension).openapi({
+      description: 'Output width in pixels. Omit width or height to keep the aspect ratio.',
+    }),
+    height: integer(1, config.maxOutputDimension).openapi({
+      description: 'Output height in pixels. Omit width or height to keep the aspect ratio.',
+    }),
+    crop: z
+      .enum(['fit', 'fill', 'scale', 'pad'], { error: 'must be one of fit, fill, scale, pad' })
+      .optional()
+      .openapi({
+        description:
+          'How the source fits the box: fit stays inside it and never enlarges; fill covers it and crops; scale stretches to it; pad fits inside it and pads.',
+        default: 'fit',
       }),
-      height: integer(1, config.maxOutputDimension).openapi({
-        description: 'Output height in pixels. Omit width or height to keep the aspect ratio.',
+    format: z
+      .enum(['jpeg', 'png', 'webp', 'avif'], { error: 'must be one of jpeg, png, webp, avif' })
+      .optional()
+      .openapi({
+        description: 'Output encoding. Defaults to the source format, or png for TIFF and GIF.',
       }),
-      crop: z
-        .enum(['fit', 'fill', 'scale', 'pad'], { error: 'must be one of fit, fill, scale, pad' })
-        .optional()
-        .openapi({
-          description:
-            'How the source fits the box: fit stays inside it and never enlarges; fill covers it and crops; scale stretches to it; pad fits inside it and pads.',
-          default: 'fit',
-        }),
-      format: z
-        .enum(['jpeg', 'png', 'webp', 'avif'], { error: 'must be one of jpeg, png, webp, avif' })
-        .optional()
-        .openapi({
-          description: 'Output encoding. Defaults to the source format, or png for TIFF and GIF.',
-        }),
-      quality: integer(1, 100).openapi({
-        description: 'Lossy encoder quality; ignored for png.',
-        default: config.defaultQuality,
-      }),
-    })
-    .refine(
-      ({ width, height }) =>
-        width === undefined || height === undefined || width * height <= maxPixels,
-      {
-        error: `width times height must be at most ${String(maxPixels)} pixels`,
-        path: ['width'],
-      },
-    );
+    quality: integer(1, 100).openapi({
+      description: 'Lossy encoder quality; ignored for png.',
+      default: config.defaultQuality,
+    }),
+  }).refine(
+    ({ width, height }) =>
+      width === undefined || height === undefined || width * height <= maxPixels,
+    {
+      error: `width times height must be at most ${String(maxPixels)} pixels`,
+      path: ['width'],
+    },
+  );
 }
 
 export type ProcessQuery = z.output<ReturnType<typeof processQuery>>;

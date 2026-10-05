@@ -126,7 +126,9 @@ Key trade-offs, each with a decision-log entry:
 | `format` | `jpeg`, `png`, `webp`, `avif` | source format; `png` for TIFF and GIF |
 | `quality` | integer 1 to 100, lossy encoders only | 80 |
 
-The dimension limits and default quality are configuration defaults. Inputs are JPEG, PNG,
+Any other parameter is a 400 `invalid_parameter` naming it, so `?widht=5` fails instead of
+returning the image untransformed; `/info` takes only `url`. The dimension limits and default
+quality are configuration defaults. Inputs are JPEG, PNG,
 WebP, GIF, AVIF, and TIFF; animated inputs contribute their first frame; SVG is refused
 (decision 14).
 
@@ -139,7 +141,7 @@ and exposes `ETag`, `X-Request-Id`, the `X-Image-*` headers, `X-Result-Cache`, a
 rate-limit headers. Upstream headers are never forwarded.
 
 Every error is `application/problem+json` with `Cache-Control: no-store` and a stable `code`
-from the SDK's union. Validation failures add `errors: [{ field, message }]`; upstream
+from the SDK's union. Validation failures add `errors: [{ field, message }]`, one per rejected parameter; upstream
 failures add `upstreamStatus`. `type` is a relative reference into `/docs`.
 
 ```json
@@ -155,7 +157,7 @@ failures add `upstreamStatus`. `type` is a relative reference into `/docs`.
 
 | Situation | Status | Code |
 |---|---|---|
-| Malformed or out-of-range parameters, including output dimensions over limits | 400 | `invalid_parameter` |
+| Malformed, out-of-range, or unknown parameters, including output dimensions over limits | 400 | `invalid_parameter` |
 | URL blocked by policy, including a blocked redirect hop or the loop marker | 403 | `url_not_allowed` |
 | Source exceeds `MAX_SOURCE_BYTES` or `MAX_INPUT_PIXELS` | 413 | `source_too_large` |
 | Source is not a supported image type | 415 | `unsupported_source_type` |
@@ -354,8 +356,6 @@ Open design questions found during implementation:
   AVIF effort with an AVIF pixel cap and plain libjpeg, no AVIF output, or a new budget.
 - **Transparent sources encoded as JPEG.** sharp drops alpha, so transparent pixels turn
   black; flattening onto white before encoding is the likely fix.
-- **Unknown query parameters are ignored.** `?widht=5` returns 200 untransformed, and extra
-  parameters let callers mint unlimited CloudFront cache keys; a 400 would tighten this.
 - **TLS minimum.** The default CloudFront certificate's TLS policy is fixed; see next steps.
 - **Smaller items.** With `format` omitted, a PNG, TIFF, or GIF source still makes one
   in-process result-cache entry per `quality`, since the key is formed before the fetch; its

@@ -64,13 +64,18 @@ response carries `Content-Type: application/problem+json`, `Cache-Control: no-st
 
 Validation failures from the route schema are turned into `ServiceError('invalid_parameter')`
 with `fields` built from the Zod issues: `field` is the parameter name, `message` is a
-sentence saying what is accepted (`must be an integer between 1 and 4096`).
+sentence saying what is accepted (`must be an integer between 1 and 4096`). Both query
+schemas are strict, so a parameter the route does not define fails validation: Zod reports
+every unknown key in one `unrecognized_keys` issue whose `keys` lists them, and the hook
+writes one entry per key, with the message `unknown parameter` set on the schema
+(decision 61). A repeated key reaches the schema as an array, so it fails as that
+parameter's own error, or once as unknown.
 
 ## Routes
 
 Each route is a `createRoute` definition and a handler in its own file under `http/routes/`.
 
-**`GET /process`, `HEAD /process`.** Query schema:
+**`GET /process`, `HEAD /process`.** Query schema, a `z.strictObject`:
 
 | Field | Schema |
 |---|---|
@@ -115,7 +120,7 @@ refinement carries its own, so the default hook only copies `issue.message` into
 one entry per parameter. The query schema's output types an omitted field as
 `T | undefined`, so `toSpec` accepts that shape as well as `ProcessParams` (decision 45).
 
-**`GET /info`.** Same `url` schema only. Calls `describeSource`, which fetches (through the
+**`GET /info`.** Same `url` schema only, also strict. Calls `describeSource`, which fetches (through the
 source cache), sniffs, and inspects. Responds with JSON
 `{ url, finalUrl, format, width, height, bytes, pages }`, where `format` is the sniffed
 `SourceType`, and `Cache-Control: public, max-age=<SOURCE_CACHE_TTL_SECONDS>`.
@@ -186,9 +191,11 @@ deployment.
 - `process.test.ts`: the three example requests from the brief against the fake upstream;
   every response header in section 7 present with correct values; HEAD matches GET headers
   with an empty body; each validation failure returns 400 with the field named and a
-  sentence; `width * height` over the pixel cap is a `width` field error; a 304 round trip
+  sentence; an unknown parameter is refused naming it, without a fetch; `width * height` over
+the pixel cap is a `width` field error; a 304 round trip
   using the returned `ETag`.
-- `info.test.ts`: metadata for each format; the same errors as `/process` for bad URLs.
+- `info.test.ts`: metadata for each format; the same errors as `/process` for bad URLs; any
+  parameter other than `url` is refused naming it.
 - `errors.test.ts`: table of every `ErrorCode` through `toProblem` asserting status, title,
   content type, `no-store`, `type`; an unknown `Error` becomes `internal_error` with no
   detail; a `ServiceError` with `cause` logs the chain; no `detail` contains a filesystem
