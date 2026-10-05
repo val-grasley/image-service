@@ -65,8 +65,9 @@ fixed position (bits 96 to 127, or 16 to 47 for 6to4) and it is checked against 
 ranges in addition to the IPv6 check; the zone index is dropped before extraction.
 `64:ff9b:1::/48` is a local-use NAT64 prefix (RFC 8215) whose operator may use any RFC 6052
 layout of /48 or longer, so no one reading of its embedded address is authoritative; it is
-an IPv6 range in the table and blocked whole, as is Teredo `2001::/32` (decision 59, which
-supersedes the per-layout reading of decision 38).
+an IPv6 range in the table and blocked whole, as are Teredo `2001::/32`, benchmarking
+`2001:2::/48`, and discard-only `100::/64` (decision 59, which supersedes the per-layout
+reading of decision 38).
 
 **Host normalization.** Node's `URL` lowercases hostnames and canonicalizes IPv4 shorthand,
 octal, hex, and decimal forms to dotted quads, and brackets IPv6 literals. The policy works on
@@ -207,7 +208,8 @@ expectation. Required rows, grouped:
   `[2606:4700::1111]` passes. An IPv4-translated address with a public embedded address
   passes. `64:ff9b:1::/48` and `2001::/32` are denied as whole ranges, each with an address
   that would be public by its embedded IPv4 reading, the top of the range, and a passing
-  address just outside it.
+  address just outside it; `2001:2::/48` and `100::/64` each with an address in the range,
+  its top, and a passing address just outside it.
 - **Addresses:** a public name resolving to one address in each blocked range; one public
   plus one private address denies; a zone-indexed address in an embedding prefix is judged by
   its embedded address; each denial's `detail` is the fixed category and its `range` the

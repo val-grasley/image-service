@@ -43,6 +43,10 @@ const BLOCKED_IPV6: readonly (readonly [network: string, prefix: number])[] = [
   // Teredo (RFC 4380) carries a Teredo server's IPv4 address and an obfuscated client one; it
   // is blocked whole rather than decoded (decision 59).
   ['2001::', 32],
+  // Benchmarking (RFC 5180, erratum 1752), the analogue of 198.18.0.0/15, and discard-only
+  // (RFC 6666).
+  ['2001:2::', 48],
+  ['100::', 64],
   ['fc00::', 7],
   ['fe80::', 10],
   ['fec0::', 10],

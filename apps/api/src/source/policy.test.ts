@@ -398,6 +398,28 @@ describe('checkUrl', () => {
         expect: literal('2001:0:ffff:ffff:ffff:ffff:ffff:ffff', '2001::/32'),
       },
       {
+        name: 'denies the benchmarking prefix 2001:2::/48',
+        url: 'http://[2001:2::1]/',
+        expect: literal('2001:2::1', '2001:2::/48'),
+      },
+      {
+        name: 'denies the top of 2001:2::/48',
+        url: 'http://[2001:2:0:ffff:ffff:ffff:ffff:ffff]/',
+        expect: literal('2001:2:0:ffff:ffff:ffff:ffff:ffff', '2001:2::/48'),
+      },
+      { name: 'allows the /48 after 2001:2::/48', url: 'http://[2001:2:1::1]/', expect: allowed },
+      {
+        name: 'denies the discard-only prefix 100::/64',
+        url: 'http://[100::1]/',
+        expect: literal('100::1', '100::/64'),
+      },
+      {
+        name: 'denies the top of 100::/64',
+        url: 'http://[100::ffff:ffff:ffff:ffff]/',
+        expect: literal('100::ffff:ffff:ffff:ffff', '100::/64'),
+      },
+      { name: 'allows the /64 after 100::/64', url: 'http://[100:0:0:1::1]/', expect: allowed },
+      {
         name: 'allows public space just above 2001::/32',
         url: 'http://[2001:1::1]/',
         expect: allowed,
@@ -557,6 +579,8 @@ const blockedResolutions: [address: string, range: string][] = [
   ['64:ff9b:1:808:8:808:808:808', '64:ff9b:1::/48'],
   ['::ffff:0:a00:1', '10.0.0.0/8'],
   ['2001:0:4136:e378:8000:63bf:3fff:fdd2', '2001::/32'],
+  ['2001:2::1', '2001:2::/48'],
+  ['100::1', '100::/64'],
   ['2002:a00:1::', '10.0.0.0/8'],
   ['fc00::1', 'fc00::/7'],
   ['fe80::1', 'fe80::/10'],

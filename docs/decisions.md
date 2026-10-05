@@ -928,7 +928,7 @@ query string, so the edge still keeps one entry per `quality` value; each is fil
 whichever instance serves it, and for `format=png` they now carry one ETag where they used
 to carry one per `quality`.
 
-## 59. Local-use NAT64 and Teredo are blocked whole; IPv4-translated addresses are read
+## 59. Local-use NAT64, Teredo, benchmarking, and discard-only are blocked whole; IPv4-translated addresses are read
 
 **Date:** 2026-10-04
 **Context:** Decision 38 read `64:ff9b:1::/48` addresses at every RFC 6052 layout and
@@ -937,10 +937,12 @@ through an address public in all four readings, though the operator's actual lay
 unknown and its translator may reach internal IPv4 space. Teredo (`2001::/32`, RFC 4380)
 and the IPv4-translated prefix (`::ffff:0:0:0/96`, SIIT, RFC 2765)
 were not in the table at all, so an address in either passed regardless of the IPv4 address
-it carried.
-**Decision:** `64:ff9b:1::/48` and `2001::/32` are IPv6 ranges in the blocked table, denied
-whole. `::ffff:0:0:0/96` joins the embedding prefixes and is judged by the IPv4 table, as
-IPv4-mapped addresses are. The per-layout reading is removed: every remaining embedding
+it carried. Nor were IPv6 benchmarking (`2001:2::/48`, RFC 5180 as corrected by erratum
+1752, which is the prefix the IANA special-purpose registry lists), though the IPv4 table
+blocks its analogue `198.18.0.0/15`, and discard-only (`100::/64`, RFC 6666).
+**Decision:** `64:ff9b:1::/48`, `2001::/32`, `2001:2::/48`, and `100::/64` are IPv6 ranges
+in the blocked table, denied whole. `::ffff:0:0:0/96` joins the embedding prefixes and is
+judged by the IPv4 table, as IPv4-mapped addresses are. The per-layout reading is removed: every remaining embedding
 prefix carries its IPv4 address at one fixed position, so `embeddedIpv4` returns at most one
 address. This supersedes the `64:ff9b:1::/48` part of decision 38; its other two fixes (deny
 a non-IP resolution, drop the zone index) stand. Approved by the author before
@@ -948,7 +950,8 @@ implementation.
 **Rejected:** Keeping the per-layout reading for `64:ff9b:1::/48`: it fails open on the
 addresses it cannot classify. Decoding Teredo's server and obfuscated client addresses:
 more code to reach a deprecated tunnelling scheme no image host needs.
-**Consequences:** Any source reachable only through local-use NAT64 or Teredo is refused.
+**Consequences:** Any source reachable only through local-use NAT64 or Teredo, or with an
+address in the benchmarking or discard-only prefix, is refused.
 The policy table's per-layout rows are replaced by whole-range rows, including addresses in
 each new range that passed before.
 

@@ -228,7 +228,7 @@ change these rules.
 | Family | Blocked |
 |---|---|
 | IPv4 | `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.0.0.0/24`, `192.168.0.0/16`, `198.18.0.0/15`, `224.0.0.0/4`, `240.0.0.0/4` |
-| IPv6 | `::`, `::1`, `::/96` (deprecated IPv4-compatible, apply the IPv4 table), `::ffff:0:0/96` (IPv4-mapped, apply the IPv4 table), `::ffff:0:0:0/96` (IPv4-translated, SIIT, apply the IPv4 table), `64:ff9b::/96` (well-known NAT64, apply the IPv4 table), `64:ff9b:1::/48` (local-use NAT64, blocked whole), `2001::/32` (Teredo, blocked whole), `2002::/16` (6to4, apply the IPv4 table to the embedded address), `fc00::/7`, `fe80::/10`, `fec0::/10`, `ff00::/8` |
+| IPv6 | `::`, `::1`, `::/96` (deprecated IPv4-compatible, apply the IPv4 table), `::ffff:0:0/96` (IPv4-mapped, apply the IPv4 table), `::ffff:0:0:0/96` (IPv4-translated, SIIT, apply the IPv4 table), `64:ff9b::/96` (well-known NAT64, apply the IPv4 table), `64:ff9b:1::/48` (local-use NAT64, blocked whole), `2001::/32` (Teredo, blocked whole), `2001:2::/48` (benchmarking), `100::/64` (discard-only), `2002::/16` (6to4, apply the IPv4 table to the embedded address), `fc00::/7`, `fe80::/10`, `fec0::/10`, `ff00::/8` |
 
 A denial by these rules gives the problem a fixed category as its `detail` ("resolves to a
 private or reserved address"), never the resolved address or the range it matched, either
