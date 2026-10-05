@@ -4,28 +4,6 @@
 (the UI at `/`, API docs at `/docs`), deployed from this repository to us-east-2 and kept
 running for at least seven days from submission.
 
-## At a glance
-
-`GET /process` fetches an image from a public URL, resizes it, converts its format, and
-returns it; `GET /info` describes a source without transforming it. The brief's three
-example requests, against the live service with public images:
-
-```sh
-L=https://d244qv5g3kagmy.cloudfront.net/process
-J=https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg
-P=https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png
-curl -sS -o out1.jpg  "$L?url=$J&width=500&height=300"                            # 314×300, aspect kept
-curl -sS -o out2.jpg  "$L?url=$P&format=jpeg&quality=80"                          # transparency flattened on white
-curl -sS -o out3.webp "$L?url=$J&width=800&height=600&format=webp&crop=fill"      # exactly 800×600
-```
-
-Built: the API with `crop=fit|fill|scale|pad` and `format=jpeg|png|webp|avif`, a UI, a
-typed SDK and an OpenAPI document (the two bonuses taken), an SSRF-safe fetch policy, limits
-on every resource, per-client rate limiting, edge and in-process caching, RFC 9457 errors,
-and a one-command CDK deployment. Left out, with reasons in the decision log: video
-thumbnails, `format=auto`, CI, and metrics. Details follow; the rest of this README is the
-long form.
-
 An HTTP service that fetches an image from a caller-supplied URL, resizes and re-encodes it,
 and returns the result, with a single-page UI that calls the API through a dependency-free
 TypeScript SDK. It deploys to AWS Lambda behind CloudFront with CDK and runs locally with no
@@ -38,6 +16,29 @@ bound, and every error is RFC 9457 problem details with a stable code. The desig
 (`apps/web`), the SDK (`packages/sdk`), the test image server (`packages/fake-upstream`), the
 CDK app (`infra`), and the Playwright suite (`e2e`); architecture section 3 states each
 directory's responsibility.
+
+## At a glance
+
+`GET /process` fetches an image from a public URL, resizes it, converts its format, and
+returns it; `GET /info` describes a source without transforming it. The brief's three
+example requests, against the live service with public images:
+
+```sh
+L=https://d244qv5g3kagmy.cloudfront.net/process
+J=https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg
+P=https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png
+curl -sS -o out1.jpg  "$L?url=$J&width=500&height=300"                            # 314 by 300, aspect kept
+curl -sS -o out2.jpg  "$L?url=$P&format=jpeg&quality=80"                          # transparency flattened on white
+curl -sS -o out3.webp "$L?url=$J&width=800&height=600&format=webp&crop=fill"      # exactly 800 by 600
+```
+
+Built: the API with `crop=fit|fill|scale|pad` and `format=jpeg|png|webp|avif`, a UI, a
+typed SDK and an OpenAPI document (the two bonuses taken), an SSRF-safe fetch policy, limits
+on every resource, per-client rate limiting, edge and in-process caching, RFC 9457 errors,
+and a CDK deployment reproducible from the repository. Bonuses left out, with reasons in
+the decision log: video thumbnails, `format=auto`, CI, and metrics. There is no
+authentication: the service is an open proxy bounded by rate limits (decision 29). The full
+list is under "Left out and next steps".
 
 ## Quick start
 
@@ -53,18 +54,21 @@ npm run test:e2e          # build, then Playwright (once: npx playwright install
 npm run preflight         # format check, lint, typecheck and build, tests
 ```
 
-The brief's three example requests, against the local server:
+The brief's three example requests against the local server, with the images from "At a
+glance":
 
 ```sh
-curl -sS -o out1.jpg  'http://localhost:3000/process?url=https://example.com/image.jpg&width=500&height=300'
-curl -sS -o out2.jpg  'http://localhost:3000/process?url=https://example.com/image.png&format=jpeg&quality=80'
-curl -sS -o out3.webp 'http://localhost:3000/process?url=https://example.com/image.jpg&width=800&height=600&format=webp&crop=fill'
+L=http://localhost:3000/process
+J=https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg
+P=https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png
+curl -sS -o out1.jpg  "$L?url=$J&width=500&height=300"
+curl -sS -o out2.jpg  "$L?url=$P&format=jpeg&quality=80"
+curl -sS -o out3.webp "$L?url=$J&width=800&height=600&format=webp&crop=fill"
 ```
 
-Replace the `example.com` URLs with images that exist. A source must be public and reachable:
-the fetch policy refuses loopback, private, and link-local addresses, so a URL on your own
-machine or network is answered 403 `url_not_allowed`. The first request returns at most 500
-by 300 with the aspect ratio kept, because `crop` defaults to `fit`.
+A source must be public and reachable: the fetch policy refuses loopback, private, and
+link-local addresses, so a URL on your own machine or network is answered 403
+`url_not_allowed`.
 
 Without network access, run the same requests against the fake upstream the tests use, with
 its exact address allowed (the name `localhost` is always refused):

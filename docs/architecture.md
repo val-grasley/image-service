@@ -3,8 +3,8 @@
 This document is the top-level design for the image processing service. It fixes what every
 subsystem depends on: deployment shape, repository layout, request lifecycle, the fetch
 policy, module seams, the public contract, and limits. Design documents under
-`docs/design/` go deeper only where there are further decisions to make; their status is
-listed in section 11. `docs/decisions.md` records why each choice was made and what was
+`docs/design/` go deeper only where there are further decisions to make; all are approved
+(section 11). `docs/decisions.md` records why each choice was made and what was
 rejected.
 
 Implementers read this document first, then the design document for the subsystem being
@@ -104,7 +104,7 @@ directory's statement.
 ├── docs/
 │   ├── architecture.md       This document.
 │   ├── decisions.md          Decision log.
-│   └── design/               One design document per subsystem (section 11).
+│   └── design/               One design document per subsystem.
 ├── apps/
 │   ├── api/
 │   │   ├── src/
@@ -527,9 +527,8 @@ logger setup, the request-id middleware, the loop-guard middleware, the esbuild 
 ## 11. Document status
 
 Every document is approved: `architecture.md` and `decisions.md` in the first commit, and
-each design document in the commit that added it. The design documents govern
-implementation, and a document change forced by the code rides in the same commit
-(AGENTS.md "Documents are the source of truth").
+each design document in the commit that added it. Changes to them follow AGENTS.md,
+"Documents are the source of truth".
 
 ## 12. Next steps beyond this scope
 

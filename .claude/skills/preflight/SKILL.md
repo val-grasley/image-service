@@ -61,7 +61,7 @@ summary as a follow-up.
 For each of these, either confirm no change is needed or make the change in this commit:
 
 - `docs/architecture.md`: the tree (new files or directories), section 7 (contract), section
-  8 (limits), section 11 (document status).
+  8 (limits).
 - The design document for the subsystem touched.
 - `docs/decisions.md`: any divergence from a document, any new runtime dependency, any new
   status code.
