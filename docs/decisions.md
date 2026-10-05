@@ -1202,10 +1202,11 @@ must then fit `MAX_AVIF_OUTPUT_PIXELS` (decision 64) whatever its size against t
 Each breach is 422 `output_too_large`, decision 23's code for an output the service will not
 produce, widened as decision 64 widened it; the detail names the variable, the computed
 size, and the limit. The route's 400 for out-of-range requested parameters is unchanged. An
-output no larger than the source on both axes is exempt from the first two checks, by the
-author's ruling: it is at most the source's size, which `MAX_INPUT_PIXELS` already bounds,
-so no aspect ratio can have inflated it. That covers every request without dimensions and
-every `fit`. The AVIF cap is not exempt, because its reason is encode time, which an output
+output no larger than the source on both axes is exempt from the first two checks: it is at
+most the source's size, which `MAX_INPUT_PIXELS` already bounds, so no aspect ratio can have
+inflated it. That covers every request without dimensions and every `fit`. The
+no-dimension exemption is the author's ruling; its generalization to any output no larger
+than the source was proposed in review and adopted, with the author informed. The AVIF cap is not exempt, because its reason is encode time, which an output
 the size of the source costs as much as an enlarged one.
 **Rejected:** Holding every output to the limits: refuses a plain format conversion of a
 6000 by 4000 photograph that `MAX_INPUT_PIXELS` admits. Exempting only requests without

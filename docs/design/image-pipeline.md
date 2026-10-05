@@ -236,6 +236,9 @@ change, and contains the href.
   dimensions on such a source, are 200 at the source size; an avif output between the AVIF
   cap and `MAX_OUTPUT_PIXELS` is 422 naming the AVIF cap even without dimensions, while webp
   passes.
+- `transform` on a 100 by 100 source with `crop=scale` to 100 by 2000, and to 2000 by 100,
+  under a 1024 side limit throws `output_too_large` naming `MAX_OUTPUT_DIMENSION`, so
+  either enlarged axis triggers the check and either over-limit side breaches it.
 - An avif output above a small `maxAvifOutputPixels` throws `output_too_large` with the
   detail naming the variable and the computed size; the same source resized under the cap,
   or encoded as webp, passes; a source kept as avif is capped too.

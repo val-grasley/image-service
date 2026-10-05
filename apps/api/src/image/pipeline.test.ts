@@ -269,6 +269,23 @@ describe('transform limits', () => {
     );
   });
 
+  for (const [width, height] of [
+    [100, 2000],
+    [2000, 100],
+  ] as const) {
+    it(`refuses a scale to ${String(width)} by ${String(height)} whose one enlarged side exceeds MAX_OUTPUT_DIMENSION`, async () => {
+      const refused = run(
+        await quadrants(100, 100),
+        { crop: 'scale', width, height },
+        { maxOutputDimension: 1024 },
+      );
+      await expect(refused).rejects.toMatchObject({ code: 'output_too_large' });
+      await expect(refused).rejects.toThrow(
+        /MAX_OUTPUT_DIMENSION allows at most 1024 on each side/,
+      );
+    });
+  }
+
   it('accepts an avif output exactly at the AVIF pixel cap', async () => {
     const cap = { maxAvifOutputPixels: 400 * 200 };
     const result = await run(await quadrants(400, 200), { format: 'avif' }, cap);

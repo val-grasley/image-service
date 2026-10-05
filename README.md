@@ -133,9 +133,8 @@ quality are configuration defaults. They also hold for the size the transform wi
 an output larger than the source on either axis must fit `MAX_OUTPUT_DIMENSION` and
 `MAX_OUTPUT_PIXELS`, else 422. An output no larger than the source, including any request
 without dimensions, is already bounded by `MAX_INPUT_PIXELS`; the AVIF cap applies to every
-AVIF output. Inputs are
-JPEG, PNG, WebP, GIF, AVIF, and TIFF; animated inputs contribute their first frame; SVG is
-refused (decision 14).
+AVIF output. Inputs are JPEG, PNG, WebP, GIF, AVIF, and TIFF; animated inputs contribute
+their first frame; SVG is refused (decision 14).
 
 Image responses carry `Content-Type`, `ETag`, `Cache-Control: public, max-age=3600`,
 `X-Image-Width`, `X-Image-Height`, `X-Image-Format`, `X-Result-Cache` (`hit` or `miss`,
